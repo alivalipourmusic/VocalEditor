@@ -443,7 +443,10 @@ int VocalEditorAudioProcessor::levelEventsToTarget (float targetDb, bool selecte
 
         const float measuredDb = juce::Decibels::gainToDecibels (
             static_cast<float> (rms), -120.0f);
-        const float deltaDb = juce::jlimit (-24.0f, 12.0f, targetDb - measuredDb);
+        // Compensate for the event's current gain so repeated Level Process
+        // operations converge toward the target instead of accumulating gain.
+        const float effectiveDb = measuredDb + event->gainDb;
+        const float deltaDb = juce::jlimit (-24.0f, 12.0f, targetDb - effectiveDb);
         event->gainDb = juce::jlimit (-96.0f, 24.0f, event->gainDb + deltaDb);
         for (auto& point : event->envelope)
             point.gainDb = juce::jlimit (-120.0f, 24.0f, point.gainDb + deltaDb);
