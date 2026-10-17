@@ -342,6 +342,39 @@ void VocalEditorAudioProcessor::setSelectedEvent (VocalEvent* event)
         selectedEventIds.add (event->id);
 }
 
+void VocalEditorAudioProcessor::splitEvent (const juce::Uuid& id, double splitTime)
+{
+    auto* event = eventList.getById (id);
+    if (event == nullptr || event->locked)
+        return;
+
+    const double split = juce::jlimit (event->startTime, event->endTime, splitTime);
+    if (split - event->startTime < 0.005 || event->endTime - split < 0.005)
+        return;
+
+    const double originalEnd = event->endTime;
+    const double originalFadeOut = event->fadeOutMs;
+    const auto originalType = event->type;
+    const auto originalFadeOutCurve = event->fadeOutCurve;
+    const float originalGain = event->gainDb;
+
+    // Keep the original event as the left-hand segment. The original fade-in
+    // remains at the beginning; the original fade-out moves to the right segment.
+    event->endTime = split;
+    event->fadeOutMs = 0.0;
+
+    auto* right = eventList.add (split, originalEnd, originalType);
+    right->gainDb = originalGain;
+    right->fadeInMs = 0.0;
+    right->fadeOutMs = juce::jmin (originalFadeOut, right->getLength() * 500.0);
+    right->fadeOutCurve = originalFadeOutCurve;
+    right->fadeInCurve = event->fadeInCurve;
+    right->locked = false;
+
+    setSelectedEvent (event);
+    updateProcessedBuffer();
+}
+
 void VocalEditorAudioProcessor::deleteEvent (const juce::Uuid& id)
 {
     if (selectedEvent != nullptr && selectedEvent->id == id)
