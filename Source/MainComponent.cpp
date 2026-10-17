@@ -24,7 +24,7 @@ MainComponent::MainComponent (VocalEditorAudioProcessor& p)
     zoomFitButton.onClick = [this] { zoomFitClicked(); };
     createEventButton.onClick = [this] { createEventClicked(); };
     undoButton.onClick = [this] { undoClicked(); };
-    redoButton.onClick = [this] { redoClicked(); }
+    redoButton.onClick = [this] { redoClicked(); };
 
     for (auto* btn : { &openButton, &playButton, &stopButton, 
                        &zoomInButton, &zoomOutButton, &zoomFitButton })
