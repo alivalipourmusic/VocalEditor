@@ -1,0 +1,62 @@
+#pragma once
+
+#include <JuceHeader.h>
+#include "PluginProcessor.h"
+#include "WaveformComponent.h"
+#include "TimelineComponent.h"
+
+//==============================================================================
+/**
+    Main content area: toolbar + timeline + waveform + transport
+*/
+class MainComponent : public juce::Component,
+                      public juce::FileDragAndDropTarget,
+                      private juce::Timer
+{
+public:
+    MainComponent (VocalEditorAudioProcessor& processor);
+    ~MainComponent() override;
+
+    void paint (juce::Graphics& g) override;
+    void resized() override;
+
+    // File drag & drop
+    bool isInterestedInFileDrag (const juce::StringArray& files) override;
+    void filesDropped (const juce::StringArray& files, int x, int y) override;
+
+    void loadFile (const juce::File& file);
+
+private:
+    void timerCallback() override;
+    void openButtonClicked();
+    void playButtonClicked();
+    void stopButtonClicked();
+    void zoomInClicked();
+    void zoomOutClicked();
+    void zoomFitClicked();
+
+    VocalEditorAudioProcessor& processor;
+
+    // UI Components
+    juce::TextButton openButton { "Open" };
+    juce::TextButton playButton { "Play" };
+    juce::TextButton stopButton { "Stop" };
+    juce::TextButton zoomInButton { "+" };
+    juce::TextButton zoomOutButton { "-" };
+    juce::TextButton zoomFitButton { "Fit" };
+    
+    juce::Label titleLabel;
+    juce::Label statusLabel;
+    juce::Label timeLabel;
+    
+    TimelineComponent timeline;
+    WaveformComponent waveform;
+
+    // Colors matching product design
+    juce::Colour bgColour       { 0xff0f172a };
+    juce::Colour panelColour    { 0xff1e293b };
+    juce::Colour accentColour   { 0xff2dd4bf };
+    juce::Colour textColour     { 0xffe2e8f0 };
+
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (MainComponent)
+};
