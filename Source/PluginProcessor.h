@@ -87,9 +87,30 @@ public:
     void splitEvent (const juce::Uuid& id, double splitTime);
     void mergeEvents (const juce::Uuid& idA, const juce::Uuid& idB);
     void deleteEvent (const juce::Uuid& id);
+    void deleteSelectedEvents();
 
     VocalEvent* getSelectedEvent() { return selectedEvent; }
-    void setSelectedEvent (VocalEvent* e) { selectedEvent = e; }
+    void setSelectedEvent (VocalEvent* e);
+    void addToSelection (VocalEvent* e);
+    void toggleInSelection (VocalEvent* e);
+    void clearEventSelection();
+    bool isEventSelected (const juce::Uuid& id) const;
+    int getNumSelectedEvents() const { return selectedEventIds.size(); }
+    const juce::Array<juce::Uuid>& getSelectedEventIds() const { return selectedEventIds; }
+
+    bool exportProcessedAudio (const juce::File& file, juce::String& errorMessage);
+
+    struct SegmentParams
+    {
+        float silenceThresholdDb = -40.0f;
+        double minSilenceMs      = 120.0;
+        double minEventMs        = 80.0;
+        double padMs             = 20.0;
+        bool   clearExisting     = true;
+        VocalEvent::Type eventType = VocalEvent::Type::Phrase;
+    };
+
+    int autoSegmentFromSilence (const SegmentParams& params = {});
 
     juce::UndoManager& getUndoManager() { return undoManager; }
     void undo() { undoManager.undo(); }
@@ -119,6 +140,7 @@ private:
     Selection selection;
     EventList eventList;
     VocalEvent* selectedEvent = nullptr;
+    juce::Array<juce::Uuid> selectedEventIds;
 
     juce::UndoManager undoManager;
 
