@@ -42,6 +42,8 @@ private:
     void gainSliderChanged();
     void autoSegmentClicked();
     void levelProcessClicked();
+    void autoSegmentClicked();
+    void levelProcessClicked();
 
     VocalEditorAudioProcessor& processor;
 
