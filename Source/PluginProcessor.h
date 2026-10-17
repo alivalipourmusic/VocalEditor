@@ -2,6 +2,8 @@
 
 #include <JuceHeader.h>
 #include "VocalEvent.h"
+#include <array>
+#include <atomic>
 
 //==============================================================================
 class VocalEditorAudioProcessor : public juce::AudioProcessor
@@ -125,8 +127,12 @@ private:
     juce::AudioThumbnailCache thumbnailCache { 5 };
 
     juce::AudioBuffer<float> audioBuffer;
-    juce::AudioBuffer<float> processedBuffer;
-    bool processedNeedsUpdate = true;
+
+    // Triple-buffered render snapshots: the message thread prepares edits while
+    // the audio thread reads one immutable snapshot without taking a blocking lock.
+    std::array<juce::AudioBuffer<float>, 3> processedBuffers;
+    std::atomic<int> activeProcessedBuffer { 0 };
+    std::atomic<int> readingProcessedBuffer { -1 };
 
     juce::File currentAudioFile;
     juce::File currentProjectFile;
