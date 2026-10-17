@@ -385,7 +385,11 @@ bool MainComponent::keyPressed (const juce::KeyPress& key, juce::Component* orig
     if (code == juce::KeyPress::deleteKey || code == juce::KeyPress::backspaceKey)
     {
         if (processor.getNumSelectedEvents() > 0)
-            processor.deleteSelectedEvents();
+        {
+            const auto selectedIds = processor.getSelectedEventIds();
+            for (const auto& id : selectedIds)
+                processor.deleteEvent (id);
+        }
         else if (auto* event = processor.getSelectedEvent())
             processor.deleteEvent (event->id);
         waveform.repaint();
