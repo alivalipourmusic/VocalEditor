@@ -4,97 +4,119 @@
 
 Professional Vocal Editing • Intelligent Analysis • Precision Control
 
-## Phase 1 – Foundation
-
-This repository contains the **Phase 1** implementation:
-
-- Project structure with **JUCE 8** (CMake)
-- Standalone + VST3 targets
-- Modern dark UI (graphite / turquoise)
-- Waveform display with `AudioThumbnail`
-- Timeline / time ruler
-- Mouse selection (click + drag)
-- Zoom (mouse wheel + buttons)
-- Scroll / view range
-- Basic transport (Play / Stop)
-- Drag & Drop + Open file dialog
-- Playback of loaded audio
-
-### Supported audio formats (Phase 1)
-WAV, AIFF, FLAC, MP3, OGG (via JUCE)
+Standalone (Windows) + **VST3** (Cubase and other hosts)
 
 ---
 
-## Requirements
+## Current status
 
-- CMake ≥ 3.22
-- C++17 compiler (MSVC, Clang, GCC)
-- JUCE 8.x (clone next to the project)
+| Phase | Focus | Status |
+|-------|--------|--------|
+| **1** | JUCE structure, Waveform, Timeline, selection, transport | Done |
+| **2** | Events, Gain, Fade, Envelope, Split, multi-select, project, export | Done (core) |
+| **3** | Silence detect, Auto Segment, Level Phrases | Core done |
 
-## Building
+---
 
-### 1. Clone the project and JUCE
+## Requirements (Windows build)
 
-```bash
+- **Windows 10/11 x64**
+- **Visual Studio 2022** (Desktop development with C++)
+- **CMake ≥ 3.22**
+- **Git**
+- **JUCE 8.0.4** (cloned next to the repo)
+
+Optional: Cubase 12/13/14 for VST3 testing
+
+---
+
+## Build steps (Windows)
+
+Open **x64 Native Tools Command Prompt for VS 2022** or a Developer PowerShell.
+
+```bat
+:: 1) Clone project
 git clone https://github.com/alivalipourmusic/VocalEditor.git
 cd VocalEditor
 
-# Clone JUCE next to the project
-git clone --depth 1 --branch 8.0.4 https://github.com/juce-framework/JUCE.git ../JUCE
-```
+:: 2) Clone JUCE as sibling of VocalEditor
+cd ..
+git clone --depth 1 --branch 8.0.4 https://github.com/juce-framework/JUCE.git JUCE
+cd VocalEditor
 
-### 2. Configure & Build (Windows – Visual Studio recommended)
-
-```bash
-mkdir build && cd build
+:: 3) Configure
+mkdir build
+cd build
 cmake .. -G "Visual Studio 17 2022" -A x64
+
+:: 4) Build Release
 cmake --build . --config Release
 ```
 
-### 3. Linux / macOS
+### Expected outputs
 
-```bash
-mkdir build && cd build
-cmake .. -DCMAKE_BUILD_TYPE=Release
-cmake --build . --config Release -j$(nproc)
-```
+| Target | Typical path under `build/` |
+|--------|-----------------------------|
+| **Standalone** | `VocalEditor_artefacts\\Release\\Standalone\\Vocal Editor.exe` |
+| **VST3** | `VocalEditor_artefacts\\Release\\VST3\\Vocal Editor.vst3` |
 
-### Outputs
-- Standalone: `VocalEditor_Standalone`
-- VST3: `VocalEditor.vst3`
+Search for `Vocal Editor.exe` and `Vocal Editor.vst3` inside `build` if paths differ.
 
----
+### Install VST3 for Cubase
 
-## Controls (Phase 1)
+Copy the whole `Vocal Editor.vst3` folder to:
 
-| Action              | How                                      |
-|---------------------|------------------------------------------|
-| Open file           | Open button or Drag & Drop               |
-| Select region       | Click + drag on waveform                 |
-| Extend selection    | Shift + click                            |
-| Clear selection     | Double-click                             |
-| Move playhead       | Click on waveform                        |
-| Zoom                | Mouse wheel or +/- buttons               |
-| Zoom to fit         | Fit button                               |
-| Play / Pause        | Play button                              |
-| Stop + rewind       | Stop button                              |
+- `C:\\Program Files\\Common Files\\VST3\\`
+
+Then rescan plug-ins in Cubase.
 
 ---
 
-## Roadmap (from Product Spec)
+## Test checklist
 
-| Phase | Focus                                      | Status     |
-|-------|--------------------------------------------|------------|
-| 1     | UI + Waveform + Timeline + Selection       | **Current** |
-| 2     | Gain / Fade / Envelope / Split / Merge / Undo | Planned  |
-| 3     | Full Standalone + VST3 stability           | Planned    |
-| 4     | First AI features (Word detect + Smart Leveling) | Planned |
-| 5     | Advanced AI + Dynamics                      | Planned   |
-| 6     | Pitch editing + Release                    | Planned   |
+### A. Build
+- [ ] CMake configure succeeds
+- [ ] Release build succeeds (Standalone + VST3)
+- [ ] Standalone starts without crash
+
+### B. Phase 1-2 core
+- [ ] Open WAV
+- [ ] Waveform + timeline visible
+- [ ] Zoom / Fit
+- [ ] Play / Stop
+- [ ] Select region -> Create Event
+- [ ] Gain change + Undo
+- [ ] Fade In/Out from panel
+- [ ] Drag fade handles
+- [ ] Envelope points (Alt+click / drag)
+- [ ] Double-click Split
+- [ ] Multi-select + Delete
+- [ ] Save .veproj -> reopen -> events restored
+- [ ] Segment sliders restored from project
+- [ ] Export WAV and audition
+
+### C. Phase 3
+- [ ] Auto Segment creates phrases
+- [ ] Change Threshold and re-run
+- [ ] Word preset
+- [ ] Level Phrases (Median)
+- [ ] Level Phrases (Mean / Loudest)
+- [ ] Level with multi-selection only
+
+### D. VST3 / Cubase
+- [ ] Plug-in appears after rescan
+- [ ] Editor opens
+- [ ] Host playback not muted when plugin idle (pass-through)
+- [ ] No crash on open/close editor
 
 ---
 
-## License
+## Known limitations
 
-Proprietary – Avlirecordlabel  
-All rights reserved.
+- Undo is complete mainly for **Gain**
+- Merge API exists but no dedicated UI button
+- Auto Segment clears previous events by default
+- Project stores path to audio, not embedded audio
+- Full Cubase validation required on your machine
+
+Vocal Editor — Avlirecordlabel
