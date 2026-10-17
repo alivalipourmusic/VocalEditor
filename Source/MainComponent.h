@@ -4,6 +4,7 @@
 #include "PluginProcessor.h"
 #include "WaveformComponent.h"
 #include "TimelineComponent.h"
+#include "SelectedEventPanel.h"
 
 //==============================================================================
 /**
@@ -61,6 +62,7 @@ private:
 
     TimelineComponent timeline;
     WaveformComponent waveform;
+    SelectedEventPanel eventPanel;
 
     juce::Colour bgColour     { 0xff0f172a };
     juce::Colour panelColour  { 0xff1e293b };
