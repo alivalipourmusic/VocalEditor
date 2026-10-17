@@ -337,8 +337,9 @@ void MainComponent::autoSegmentClicked()
     const int count = processor.autoSegmentFromSilence (params);
     waveform.repaint();
     eventPanel.repaint();
+    const auto segmentLabel = params.eventType == VocalEvent::Type::Word ? "word-labelled region(s)" : "phrase(s)";
     statusLabel.setText ("Auto Segment: created " + juce::String (count)
-                         + " phrase(s). Review boundaries before processing.",
+                         + " " + segmentLabel + ". This is silence-based detection; review boundaries.",
                          juce::dontSendNotification);
 }
 
@@ -365,6 +366,11 @@ bool MainComponent::keyPressed (const juce::KeyPress& key, juce::Component* orig
     if (code == juce::KeyPress::spaceKey)
     {
         playButtonClicked();
+        return true;
+    }
+    if (code == juce::KeyPress::escapeKey)
+    {
+        stopButtonClicked();
         return true;
     }
     if (command && code == 'Z')
