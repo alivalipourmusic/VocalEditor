@@ -395,7 +395,10 @@ int VocalEditorAudioProcessor::levelEventsToTarget (float targetDb, bool selecte
     targetDb = juce::jlimit (-36.0f, -6.0f, targetDb);
     juce::Array<VocalEvent*> targets;
 
-    if (selectedOnly && ! selectedEventIds.isEmpty())
+    if (selectedOnly && selectedEventIds.isEmpty())
+        return 0;
+
+    if (selectedOnly)
     {
         for (const auto& id : selectedEventIds)
             if (auto* event = eventList.getById (id))
