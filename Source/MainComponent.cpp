@@ -4,7 +4,8 @@
 MainComponent::MainComponent (VocalEditorAudioProcessor& p)
     : processor (p),
       timeline (p),
-      waveform (p)
+      waveform (p),
+      eventPanel (p)
 {
     setOpaque (true);
 
@@ -21,6 +22,9 @@ MainComponent::MainComponent (VocalEditorAudioProcessor& p)
     zoomInButton.onClick = [this] { zoomInClicked(); };
     zoomOutButton.onClick = [this] { zoomOutClicked(); };
     zoomFitButton.onClick = [this] { zoomFitClicked(); };
+    createEventButton.onClick = [this] { createEventClicked(); };
+    undoButton.onClick = [this] { undoClicked(); };
+    redoButton.onClick = [this] { redoClicked(); }
 
     for (auto* btn : { &openButton, &playButton, &stopButton, 
                        &zoomInButton, &zoomOutButton, &zoomFitButton })
@@ -43,8 +47,16 @@ MainComponent::MainComponent (VocalEditorAudioProcessor& p)
     timeLabel.setJustificationType (juce::Justification::centredRight);
     addAndMakeVisible (timeLabel);
 
+    for (auto* btn : { &createEventButton, &undoButton, &redoButton })
+    {
+        btn->setColour (juce::TextButton::buttonColourId, panelColour);
+        btn->setColour (juce::TextButton::textColourOffId, textColour);
+        addAndMakeVisible (btn);
+    }
+
     addAndMakeVisible (timeline);
     addAndMakeVisible (waveform);
+    addAndMakeVisible (eventPanel);
 
     startTimerHz (20);
 }
@@ -83,6 +95,12 @@ void MainComponent::resized()
     zoomInButton.setBounds (topBar.removeFromLeft (36));
     topBar.removeFromLeft (3);
     zoomFitButton.setBounds (topBar.removeFromLeft (48));
+    topBar.removeFromLeft (10);
+    createEventButton.setBounds (topBar.removeFromLeft (100));
+    topBar.removeFromLeft (4);
+    undoButton.setBounds (topBar.removeFromLeft (48));
+    topBar.removeFromLeft (3);
+    redoButton.setBounds (topBar.removeFromLeft (48));
 
     timeLabel.setBounds (topBar.removeFromRight (100));
 
@@ -90,11 +108,12 @@ void MainComponent::resized()
     auto statusBar = bounds.removeFromBottom (28);
     statusLabel.setBounds (statusBar.reduced (10, 4));
 
-    // Timeline
+    // Keep the event controls visible beside the waveform.
+    eventPanel.setBounds (bounds.removeFromRight (260).reduced (4, 2));
+
+    // Timeline and waveform share the remaining editing area.
     auto timelineArea = bounds.removeFromTop (28);
     timeline.setBounds (timelineArea.reduced (4, 0));
-
-    // Waveform fills the rest
     waveform.setBounds (bounds.reduced (4, 2));
 }
 
@@ -197,6 +216,40 @@ void MainComponent::zoomFitClicked()
     waveform.zoomToFit();
     timeline.setVisibleRange (waveform.getVisibleStartTime(), waveform.getVisibleEndTime());
 }
+
+void MainComponent::createEventClicked()
+{
+    if (auto* event = processor.createEventFromSelection())
+    {
+        processor.setSelectedEvent (event);
+        statusLabel.setText ("Event created • adjust Gain and Fade in the Selected Event panel",
+                             juce::dontSendNotification);
+        waveform.repaint();
+        eventPanel.repaint();
+    }
+    else
+    {
+        statusLabel.setText ("Select at least 5 ms of audio before creating an event",
+                             juce::dontSendNotification);
+    }
+}
+
+void MainComponent::undoClicked()
+{
+    processor.undo();
+}
+
+void MainComponent::redoClicked()
+{
+    processor.redo();
+}
+
+void MainComponent::gainSliderChanged()
+{
+    if (auto* event = processor.getSelectedEvent())
+        processor.setEventGain (event->id, static_cast<float> (gainSlider.getValue()));
+}
+
 
 //==============================================================================
 void MainComponent::timerCallback()
