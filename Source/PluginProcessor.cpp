@@ -294,6 +294,167 @@ void VocalEditorAudioProcessor::updateProcessedBuffer()
     activeProcessedBuffer.store (targetIndex, std::memory_order_release);
 }
 
+int VocalEditorAudioProcessor::autoSegmentFromSilence (const SegmentParams& params)
+{
+    if (! hasAudio() || currentSampleRate <= 0.0)
+        return 0;
+
+    const int totalSamples = audioBuffer.getNumSamples();
+    const int frameSamples = juce::jmax (1, static_cast<int> (std::round (currentSampleRate * 0.010)));
+    const int numFrames = (totalSamples + frameSamples - 1) / frameSamples;
+    const float threshold = juce::Decibels::decibelsToGain (params.silenceThresholdDb);
+    const int minSilenceFrames = juce::jmax (1, static_cast<int> (
+        std::ceil (params.minSilenceMs / 10.0)));
+    const int minEventFrames = juce::jmax (1, static_cast<int> (
+        std::ceil (params.minEventMs / 10.0)));
+    const int padSamples = juce::jmax (0, static_cast<int> (
+        std::round (params.padMs * 0.001 * currentSampleRate)));
+
+    auto frameIsActive = [&] (int frame)
+    {
+        const int start = frame * frameSamples;
+        const int count = juce::jmin (frameSamples, totalSamples - start);
+        if (count <= 0)
+            return false;
+
+        double sumSquares = 0.0;
+        int sampleCount = 0;
+        for (int ch = 0; ch < audioBuffer.getNumChannels(); ++ch)
+        {
+            const float* data = audioBuffer.getReadPointer (ch, start);
+            for (int i = 0; i < count; ++i)
+            {
+                const double sample = data[i];
+                sumSquares += sample * sample;
+            }
+            sampleCount += count;
+        }
+
+        const float rms = sampleCount > 0
+            ? static_cast<float> (std::sqrt (sumSquares / sampleCount)) : 0.0f;
+        return rms >= threshold;
+    };
+
+    if (params.clearExisting)
+    {
+        eventList.clear();
+        selectedEvent = nullptr;
+        selectedEventIds.clear();
+    }
+
+    int created = 0;
+    int activeStartFrame = -1;
+    int lastActiveEndFrame = 0;
+
+    auto addDetectedEvent = [&] (int startFrame, int endFrame)
+    {
+        int startSample = juce::jmax (0, startFrame * frameSamples - padSamples);
+        int endSample = juce::jmin (totalSamples, endFrame * frameSamples + padSamples);
+        if (endSample - startSample < minEventFrames * frameSamples)
+            return;
+
+        const double startTime = static_cast<double> (startSample) / currentSampleRate;
+        const double endTime = static_cast<double> (endSample) / currentSampleRate;
+        if (endTime - startTime < params.minEventMs * 0.001)
+            return;
+
+        eventList.add (startTime, endTime, params.eventType);
+        ++created;
+    };
+
+    for (int frame = 0; frame < numFrames; ++frame)
+    {
+        if (frameIsActive (frame))
+        {
+            if (activeStartFrame < 0)
+                activeStartFrame = frame;
+            lastActiveEndFrame = frame + 1;
+        }
+        else if (activeStartFrame >= 0
+                 && (frame + 1 - lastActiveEndFrame) >= minSilenceFrames)
+        {
+            addDetectedEvent (activeStartFrame, lastActiveEndFrame);
+            activeStartFrame = -1;
+        }
+    }
+
+    if (activeStartFrame >= 0)
+        addDetectedEvent (activeStartFrame, lastActiveEndFrame);
+
+    if (created > 0)
+        setSelectedEvent (eventList.get (eventList.size() - created));
+    updateProcessedBuffer();
+    return created;
+}
+
+int VocalEditorAudioProcessor::levelEventsToTarget (float targetDb, bool selectedOnly)
+{
+    if (! hasAudio() || currentSampleRate <= 0.0 || eventList.isEmpty())
+        return 0;
+
+    targetDb = juce::jlimit (-36.0f, -6.0f, targetDb);
+    juce::Array<VocalEvent*> targets;
+
+    if (selectedOnly && ! selectedEventIds.isEmpty())
+    {
+        for (const auto& id : selectedEventIds)
+            if (auto* event = eventList.getById (id))
+                targets.addIfNotAlreadyThere (event);
+    }
+    else
+    {
+        for (auto* event : eventList.getAll())
+            if (event != nullptr)
+                targets.add (event);
+    }
+
+    int processed = 0;
+    for (auto* event : targets)
+    {
+        if (event == nullptr || event->locked)
+            continue;
+
+        const int start = juce::jlimit (0, audioBuffer.getNumSamples(),
+            static_cast<int> (std::floor (event->startTime * currentSampleRate)));
+        const int end = juce::jlimit (start, audioBuffer.getNumSamples(),
+            static_cast<int> (std::ceil (event->endTime * currentSampleRate)));
+        if (end <= start)
+            continue;
+
+        double sumSquares = 0.0;
+        int sampleCount = 0;
+        for (int ch = 0; ch < audioBuffer.getNumChannels(); ++ch)
+        {
+            const float* data = audioBuffer.getReadPointer (ch, start);
+            for (int i = 0; i < end - start; ++i)
+            {
+                const double sample = data[i];
+                sumSquares += sample * sample;
+            }
+            sampleCount += end - start;
+        }
+
+        if (sampleCount <= 0)
+            continue;
+
+        const double rms = std::sqrt (sumSquares / sampleCount);
+        if (rms < 1.0e-7)
+            continue;
+
+        const float measuredDb = juce::Decibels::gainToDecibels (
+            static_cast<float> (rms), -120.0f);
+        const float deltaDb = juce::jlimit (-24.0f, 12.0f, targetDb - measuredDb);
+        event->gainDb = juce::jlimit (-96.0f, 24.0f, event->gainDb + deltaDb);
+        for (auto& point : event->envelope)
+            point.gainDb = juce::jlimit (-120.0f, 24.0f, point.gainDb + deltaDb);
+        ++processed;
+    }
+
+    if (processed > 0)
+        updateProcessedBuffer();
+    return processed;
+}
+
 VocalEvent* VocalEditorAudioProcessor::createEventFromSelection (VocalEvent::Type type)
 {
     if (! hasAudio() || ! selection.isActive || selection.getLength() < 0.005)
