@@ -6,7 +6,7 @@
 //==============================================================================
 /**
     Waveform display with zoom, scroll, selection and playhead.
-    Phase 1 core component.
+    Phase 1 core component + Phase 2 event visualization.
 */
 class WaveformComponent : public juce::Component,
                           public juce::ChangeListener,
@@ -51,6 +51,7 @@ private:
     double timeToX (double time) const;
     double xToTime (float x) const;
     void drawWaveform (juce::Graphics& g);
+    void drawEvents (juce::Graphics& g);
     void drawSelection (juce::Graphics& g);
     void drawPlayhead (juce::Graphics& g);
     void drawGrid (juce::Graphics& g);
