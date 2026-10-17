@@ -56,6 +56,7 @@ MainComponent::MainComponent (VocalEditorAudioProcessor& p)
     {
         btn->setColour (juce::TextButton::buttonColourId, panelColour);
         btn->setColour (juce::TextButton::textColourOffId, textColour);
+        btn->addKeyListener (this);
         addAndMakeVisible (btn);
     }
 
@@ -97,10 +98,16 @@ MainComponent::MainComponent (VocalEditorAudioProcessor& p)
         addAndMakeVisible (btn);
     }
     levelProcessButton.setColour (juce::TextButton::buttonColourId, juce::Colour (0xff155e75));
-    selectedOnlyToggle.setToggleState (true, juce::dontSendNotification);
+    selectedOnlyToggle.setToggleState (false, juce::dontSendNotification);
     selectedOnlyToggle.setColour (juce::ToggleButton::textColourId, textColour);
     selectedOnlyToggle.addKeyListener (this);
     addAndMakeVisible (selectedOnlyToggle);
+    segmentTypeCombo.addItem ("Phrase", 1);
+    segmentTypeCombo.addItem ("Word preset", 2);
+    segmentTypeCombo.setSelectedId (1, juce::dontSendNotification);
+    segmentTypeCombo.setTooltip ("Word preset marks detected regions as Word; it does not perform speech recognition.");
+    segmentTypeCombo.addKeyListener (this);
+    addAndMakeVisible (segmentTypeCombo);
 
     addAndMakeVisible (timeline);
     addAndMakeVisible (waveform);
@@ -167,6 +174,7 @@ void MainComponent::resized()
     paddingSlider.setBounds (analysisBar.removeFromLeft (102).reduced (1, 5));
     targetLevelSlider.setBounds (analysisBar.removeFromLeft (112).reduced (1, 5));
     selectedOnlyToggle.setBounds (analysisBar.removeFromLeft (112).reduced (1, 5));
+    segmentTypeCombo.setBounds (analysisBar.removeFromLeft (100).reduced (1, 5));
 
     // Status bar
     auto statusBar = bounds.removeFromBottom (28);
@@ -323,7 +331,8 @@ void MainComponent::autoSegmentClicked()
     params.minEventMs = 80.0;
     params.padMs = paddingSlider.getValue();
     params.clearExisting = true;
-    params.eventType = VocalEvent::Type::Phrase;
+    params.eventType = segmentTypeCombo.getSelectedId() == 2
+        ? VocalEvent::Type::Word : VocalEvent::Type::Phrase;
 
     const int count = processor.autoSegmentFromSilence (params);
     waveform.repaint();
