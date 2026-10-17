@@ -8,6 +8,8 @@ MainComponent::MainComponent (VocalEditorAudioProcessor& p)
       eventPanel (p)
 {
     setOpaque (true);
+    setWantsKeyboardFocus (true);
+    addKeyListener (this);
 
     // Title
     titleLabel.setText ("VOCAL EDITOR", juce::dontSendNotification);
@@ -25,6 +27,8 @@ MainComponent::MainComponent (VocalEditorAudioProcessor& p)
     createEventButton.onClick = [this] { createEventClicked(); };
     undoButton.onClick = [this] { undoClicked(); };
     redoButton.onClick = [this] { redoClicked(); };
+    autoSegmentButton.onClick = [this] { autoSegmentClicked(); };
+    levelProcessButton.onClick = [this] { levelProcessClicked(); };
 
     for (auto* btn : { &openButton, &playButton, &stopButton, 
                        &zoomInButton, &zoomOutButton, &zoomFitButton })
@@ -53,6 +57,49 @@ MainComponent::MainComponent (VocalEditorAudioProcessor& p)
         btn->setColour (juce::TextButton::textColourOffId, textColour);
         addAndMakeVisible (btn);
     }
+
+
+    // Analysis controls. These parameters remain editable so automatic detection
+    // can be tuned to the noise floor and performance of each vocal recording.
+    auto setupAnalysisSlider = [this] (juce::Slider& slider, double min, double max, double step, const juce::String& suffix)
+    {
+        slider.setRange (min, max, step);
+        slider.setValue (min);
+        slider.setTextValueSuffix (suffix);
+        slider.setSliderStyle (juce::Slider::LinearHorizontal);
+        slider.setTextBoxStyle (juce::Slider::TextBoxRight, false, 54, 20);
+        slider.setColour (juce::Slider::thumbColourId, accentColour);
+        slider.setColour (juce::Slider::textBoxTextColourId, textColour);
+        slider.setColour (juce::Slider::textBoxBackgroundColourId, panelColour);
+        addAndMakeVisible (slider);
+        slider.addKeyListener (this);
+    };
+    setupAnalysisSlider (thresholdSlider, -60.0, -18.0, 1.0, " dB");
+    thresholdSlider.setValue (-40.0, juce::dontSendNotification);
+    setupAnalysisSlider (silenceSlider, 50.0, 500.0, 10.0, " ms");
+    silenceSlider.setValue (120.0, juce::dontSendNotification);
+    setupAnalysisSlider (paddingSlider, 0.0, 100.0, 5.0, " ms");
+    paddingSlider.setValue (20.0, juce::dontSendNotification);
+    setupAnalysisSlider (targetLevelSlider, -30.0, -12.0, 1.0, " dB");
+    targetLevelSlider.setValue (-18.0, juce::dontSendNotification);
+
+    analysisLabel.setText ("Silence (dB) / Min gap / Padding / Target RMS", juce::dontSendNotification);
+    analysisLabel.setFont (juce::FontOptions (11.0f));
+    analysisLabel.setColour (juce::Label::textColourId, juce::Colour (0xff94a3b8));
+    addAndMakeVisible (analysisLabel);
+
+    for (auto* btn : { &autoSegmentButton, &levelProcessButton })
+    {
+        btn->setColour (juce::TextButton::buttonColourId, panelColour);
+        btn->setColour (juce::TextButton::textColourOffId, textColour);
+        btn->addKeyListener (this);
+        addAndMakeVisible (btn);
+    }
+    levelProcessButton.setColour (juce::TextButton::buttonColourId, juce::Colour (0xff155e75));
+    selectedOnlyToggle.setToggleState (true, juce::dontSendNotification);
+    selectedOnlyToggle.setColour (juce::ToggleButton::textColourId, textColour);
+    selectedOnlyToggle.addKeyListener (this);
+    addAndMakeVisible (selectedOnlyToggle);
 
     addAndMakeVisible (timeline);
     addAndMakeVisible (waveform);
@@ -103,6 +150,19 @@ void MainComponent::resized()
     redoButton.setBounds (topBar.removeFromLeft (48));
 
     timeLabel.setBounds (topBar.removeFromRight (100));
+
+    // Analysis toolbar (kept separate from the transport toolbar).
+    auto analysisBar = bounds.removeFromTop (58);
+    analysisBar.reduce (8, 2);
+    analysisLabel.setBounds (analysisBar.removeFromLeft (190));
+    autoSegmentButton.setBounds (analysisBar.removeFromLeft (112).reduced (2, 5));
+    levelProcessButton.setBounds (analysisBar.removeFromLeft (112).reduced (2, 5));
+    analysisBar.removeFromLeft (4);
+    thresholdSlider.setBounds (analysisBar.removeFromLeft (112).reduced (1, 5));
+    silenceSlider.setBounds (analysisBar.removeFromLeft (112).reduced (1, 5));
+    paddingSlider.setBounds (analysisBar.removeFromLeft (102).reduced (1, 5));
+    targetLevelSlider.setBounds (analysisBar.removeFromLeft (112).reduced (1, 5));
+    selectedOnlyToggle.setBounds (analysisBar.removeFromLeft (112).reduced (1, 5));
 
     // Status bar
     auto statusBar = bounds.removeFromBottom (28);
@@ -248,6 +308,89 @@ void MainComponent::gainSliderChanged()
 {
     if (auto* event = processor.getSelectedEvent())
         processor.setEventGain (event->id, static_cast<float> (gainSlider.getValue()));
+}
+
+
+void MainComponent::autoSegmentClicked()
+{
+    VocalEditorAudioProcessor::SegmentParams params;
+    params.silenceThresholdDb = static_cast<float> (thresholdSlider.getValue());
+    params.minSilenceMs = silenceSlider.getValue();
+    params.minEventMs = 80.0;
+    params.padMs = paddingSlider.getValue();
+    params.clearExisting = true;
+    params.eventType = VocalEvent::Type::Phrase;
+
+    const int count = processor.autoSegmentFromSilence (params);
+    waveform.repaint();
+    eventPanel.repaint();
+    statusLabel.setText ("Auto Segment: created " + juce::String (count)
+                         + " phrase(s). Review boundaries before processing.",
+                         juce::dontSendNotification);
+}
+
+void MainComponent::levelProcessClicked()
+{
+    const int count = processor.levelEventsToTarget (
+        static_cast<float> (targetLevelSlider.getValue()),
+        selectedOnlyToggle.getToggleState());
+    waveform.repaint();
+    eventPanel.repaint();
+    statusLabel.setText (count > 0
+        ? "Level Process: adjusted " + juce::String (count) + " event(s) toward target RMS."
+        : "Level Process: no eligible non-silent events. Select events or disable Selected only.",
+        juce::dontSendNotification);
+}
+
+bool MainComponent::keyPressed (const juce::KeyPress& key, juce::Component* originatingComponent)
+{
+    juce::ignoreUnused (originatingComponent);
+    const int code = key.getKeyCode();
+    const bool command = key.getModifiers().isCommandDown();
+    const bool shift = key.getModifiers().isShiftDown();
+
+    if (code == juce::KeyPress::spaceKey)
+    {
+        playButtonClicked();
+        return true;
+    }
+    if (command && code == 'Z')
+    {
+        undoClicked();
+        return true;
+    }
+    if (command && (code == 'Y' || (shift && code == 'Z')))
+    {
+        redoClicked();
+        return true;
+    }
+    if (command && code == 'O')
+    {
+        openButtonClicked();
+        return true;
+    }
+    if (code == juce::KeyPress::deleteKey || code == juce::KeyPress::backspaceKey)
+    {
+        if (processor.getNumSelectedEvents() > 0)
+            processor.deleteSelectedEvents();
+        else if (auto* event = processor.getSelectedEvent())
+            processor.deleteEvent (event->id);
+        waveform.repaint();
+        eventPanel.repaint();
+        return true;
+    }
+    if (! command && ! key.getModifiers().isAltDown() && code == 'S')
+    {
+        if (auto* event = processor.getSelectedEvent())
+        {
+            const double pos = processor.getPlaybackPosition();
+            processor.splitEvent (event->id, pos);
+            waveform.repaint();
+            eventPanel.repaint();
+        }
+        return true;
+    }
+    return false;
 }
 
 
