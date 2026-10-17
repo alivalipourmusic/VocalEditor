@@ -35,6 +35,7 @@ juce_generate_juce_header(VocalEditor)
 # Source files
 target_sources(VocalEditor
     PRIVATE
+        Source/VocalEvent.h
         Source/PluginProcessor.cpp
         Source/PluginProcessor.h
         Source/PluginEditor.cpp
