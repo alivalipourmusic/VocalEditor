@@ -345,10 +345,14 @@ int VocalEditorAudioProcessor::autoSegmentFromSilence (const SegmentParams& para
     int created = 0;
     int activeStartFrame = -1;
     int lastActiveEndFrame = 0;
+    int lastCreatedEndSample = 0;
 
     auto addDetectedEvent = [&] (int startFrame, int endFrame)
     {
-        int startSample = juce::jmax (0, startFrame * frameSamples - padSamples);
+        // Padding protects consonants and breath tails, but neighbouring events
+        // must not overlap or their gain envelopes would multiply.
+        int startSample = juce::jmax (lastCreatedEndSample,
+                                      juce::jmax (0, startFrame * frameSamples - padSamples));
         int endSample = juce::jmin (totalSamples, endFrame * frameSamples + padSamples);
         if (endSample - startSample < minEventFrames * frameSamples)
             return;
@@ -359,6 +363,7 @@ int VocalEditorAudioProcessor::autoSegmentFromSilence (const SegmentParams& para
             return;
 
         eventList.add (startTime, endTime, params.eventType);
+        lastCreatedEndSample = endSample;
         ++created;
     };
 
