@@ -1,0 +1,23 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check project structure
+        run: |
+          echo "Vocal Editor - Phase 1"
+          ls -la
+          test -f CMakeLists.txt
+          test -d Source
+          test -f Source/PluginProcessor.cpp
+          test -f Source/WaveformComponent.cpp
+          echo "Structure OK"
