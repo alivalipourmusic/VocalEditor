@@ -3,43 +3,34 @@
 #include <JuceHeader.h>
 
 //==============================================================================
-/**
-    A single editable vocal region / event.
-    Phase 2 core data model.
-*/
 struct VocalEvent
 {
-    enum class Type
-    {
-        Phrase,
-        Word,
-        Syllable,
-        Phoneme,
-        Custom
-    };
-
-    enum class FadeCurve
-    {
-        Linear,
-        Smooth
-    };
+    enum class Type { Phrase, Word, Syllable, Phoneme, Custom };
+    enum class FadeCurve { Linear, Smooth };
 
     juce::Uuid id;
     Type type = Type::Custom;
 
-    double startTime = 0.0;   // seconds
+    double startTime = 0.0;
     double endTime   = 0.0;
 
-    float gainDb = 0.0f;      // relative gain in dB
+    float gainDb = 0.0f;
 
-    double fadeInMs  = 0.0;   // milliseconds
+    double fadeInMs  = 0.0;
     double fadeOutMs = 0.0;
     FadeCurve fadeInCurve  = FadeCurve::Smooth;
     FadeCurve fadeOutCurve = FadeCurve::Smooth;
 
     bool locked = false;
 
-    //--------------------------------------------------------------------------
+    struct EnvelopePoint
+    {
+        float t = 0.0f;
+        float gainDb = 0.0f;
+    };
+
+    juce::Array<EnvelopePoint> envelope;
+
     double getLength() const { return juce::jmax (0.0, endTime - startTime); }
 
     bool contains (double time) const
@@ -57,6 +48,71 @@ struct VocalEvent
         return juce::Decibels::decibelsToGain (gainDb);
     }
 
+    void ensureEnvelope()
+    {
+        if (envelope.isEmpty())
+        {
+            envelope.add ({ 0.0f, gainDb });
+            envelope.add ({ 1.0f, gainDb });
+        }
+    }
+
+    float getEnvelopeGainDb (float t) const
+    {
+        t = juce::jlimit (0.0f, 1.0f, t);
+        if (envelope.isEmpty())
+            return gainDb;
+        if (t <= envelope.getFirst().t)
+            return envelope.getFirst().gainDb;
+        if (t >= envelope.getLast().t)
+            return envelope.getLast().gainDb;
+
+        for (int i = 1; i < envelope.size(); ++i)
+        {
+            const auto& a = envelope.getReference (i - 1);
+            const auto& b = envelope.getReference (i);
+            if (t <= b.t)
+            {
+                const float span = b.t - a.t;
+                if (span < 1.0e-6f)
+                    return b.gainDb;
+                const float frac = (t - a.t) / span;
+                return a.gainDb + frac * (b.gainDb - a.gainDb);
+            }
+        }
+        return gainDb;
+    }
+
+    int addOrUpdateEnvelopePoint (float t, float gDb)
+    {
+        t = juce::jlimit (0.0f, 1.0f, t);
+        ensureEnvelope();
+
+        for (int i = 0; i < envelope.size(); ++i)
+        {
+            if (std::abs (envelope.getReference (i).t - t) < 0.02f)
+            {
+                envelope.getReference (i).gainDb = gDb;
+                return i;
+            }
+        }
+
+        EnvelopePoint pt { t, gDb };
+        int idx = 0;
+        while (idx < envelope.size() && envelope.getReference (idx).t < t)
+            ++idx;
+        envelope.insert (idx, pt);
+        return idx;
+    }
+
+    void removeEnvelopePoint (int index)
+    {
+        if (envelope.size() <= 2)
+            return;
+        if (index > 0 && index < envelope.size() - 1)
+            envelope.remove (index);
+    }
+
     juce::String getTypeName() const
     {
         switch (type)
@@ -71,9 +127,6 @@ struct VocalEvent
 };
 
 //==============================================================================
-/**
-    Collection of events belonging to a project / file.
-*/
 class EventList
 {
 public:
@@ -107,10 +160,7 @@ public:
         return e;
     }
 
-    void remove (int index)
-    {
-        events.remove (index);
-    }
+    void remove (int index) { events.remove (index); }
 
     void removeById (const juce::Uuid& id)
     {
@@ -119,14 +169,12 @@ public:
                 events.remove (i);
     }
 
-    /** Returns events that overlap the given time range (sorted by start). */
     juce::Array<VocalEvent*> getInRange (double start, double end)
     {
         juce::Array<VocalEvent*> result;
         for (auto* e : events)
             if (e->overlaps (start, end))
                 result.add (e);
-
         result.sort ([] (const VocalEvent* a, const VocalEvent* b)
                      { return a->startTime < b->startTime ? -1 : 1; });
         return result;
@@ -142,6 +190,5 @@ public:
 
 private:
     juce::OwnedArray<VocalEvent> events;
-
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (EventList)
 };
