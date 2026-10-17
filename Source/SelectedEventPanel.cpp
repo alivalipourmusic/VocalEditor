@@ -104,10 +104,13 @@ void SelectedEventPanel::resized()
     emptyLabel.setVisible (! hasEvent);
     emptyLabel.setBounds (r);
 
-    for (auto* c : { (juce::Component*) &typeLabel, &timeLabel, &lengthLabel,
-                     &gainLabel, &gainSlider, &resetGainButton,
-                     &fadeInLabel, &fadeInSlider, &fadeOutLabel, &fadeOutSlider,
-                     &splitButton, &deleteButton })
+    juce::Component* controls[] = {
+        &typeLabel, &timeLabel, &lengthLabel,
+        &gainLabel, &gainSlider, &resetGainButton,
+        &fadeInLabel, &fadeInSlider, &fadeOutLabel, &fadeOutSlider,
+        &splitButton, &deleteButton
+    };
+    for (auto* c : controls)
         c->setVisible (hasEvent);
 
     if (! hasEvent)
