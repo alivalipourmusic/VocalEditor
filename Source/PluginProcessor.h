@@ -113,6 +113,7 @@ public:
     };
 
     int autoSegmentFromSilence (const SegmentParams& params = {});
+    int levelEventsToTarget (float targetDb, bool selectedOnly = true);
 
     juce::UndoManager& getUndoManager() { return undoManager; }
     void undo() { undoManager.undo(); }
