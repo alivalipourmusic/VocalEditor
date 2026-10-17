@@ -36,6 +36,7 @@ MainComponent::MainComponent (VocalEditorAudioProcessor& p)
         btn->setColour (juce::TextButton::buttonColourId, panelColour);
         btn->setColour (juce::TextButton::textColourOffId, textColour);
         btn->setColour (juce::TextButton::buttonOnColourId, accentColour.darker());
+        btn->addKeyListener (this);
         addAndMakeVisible (btn);
     }
 
@@ -104,6 +105,9 @@ MainComponent::MainComponent (VocalEditorAudioProcessor& p)
     addAndMakeVisible (timeline);
     addAndMakeVisible (waveform);
     addAndMakeVisible (eventPanel);
+    timeline.addKeyListener (this);
+    waveform.addKeyListener (this);
+    eventPanel.addKeyListener (this);
 
     startTimerHz (20);
 }
