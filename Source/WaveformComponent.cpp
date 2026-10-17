@@ -272,6 +272,12 @@ void WaveformComponent::mouseDrag (const juce::MouseEvent& e)
     repaint();
 }
 
+void WaveformComponent::mouseMove (const juce::MouseEvent& e)
+{
+    juce::ignoreUnused (e);
+    // Hover feedback can be added once fade-handle hit testing is implemented.
+}
+
 void WaveformComponent::mouseUp (const juce::MouseEvent& e)
 {
     juce::ignoreUnused (e);
