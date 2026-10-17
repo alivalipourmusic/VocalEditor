@@ -66,6 +66,7 @@ private:
     juce::Slider paddingSlider;
     juce::Slider targetLevelSlider;
     juce::ToggleButton selectedOnlyToggle { "Selected only" };
+    juce::ComboBox segmentTypeCombo;
     juce::Label analysisLabel;
     juce::Slider gainSlider;
     juce::Label  gainLabel;
