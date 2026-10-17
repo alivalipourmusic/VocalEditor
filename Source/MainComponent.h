@@ -12,6 +12,7 @@
 */
 class MainComponent : public juce::Component,
                       public juce::FileDragAndDropTarget,
+                      public juce::KeyListener,
                       private juce::Timer
 {
 public:
@@ -23,6 +24,7 @@ public:
 
     bool isInterestedInFileDrag (const juce::StringArray& files) override;
     void filesDropped (const juce::StringArray& files, int x, int y) override;
+    bool keyPressed (const juce::KeyPress& key, juce::Component* originatingComponent) override;
 
     void loadFile (const juce::File& file);
 
@@ -38,6 +40,8 @@ private:
     void undoClicked();
     void redoClicked();
     void gainSliderChanged();
+    void autoSegmentClicked();
+    void levelProcessClicked();
 
     VocalEditorAudioProcessor& processor;
 
@@ -53,6 +57,14 @@ private:
     juce::TextButton createEventButton { "Create Event" };
     juce::TextButton undoButton { "Undo" };
     juce::TextButton redoButton { "Redo" };
+    juce::TextButton autoSegmentButton { "Auto Segment" };
+    juce::TextButton levelProcessButton { "Level Process" };
+    juce::Slider thresholdSlider;
+    juce::Slider silenceSlider;
+    juce::Slider paddingSlider;
+    juce::Slider targetLevelSlider;
+    juce::ToggleButton selectedOnlyToggle { "Selected only" };
+    juce::Label analysisLabel;
     juce::Slider gainSlider;
     juce::Label  gainLabel;
 
