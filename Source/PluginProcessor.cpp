@@ -315,10 +315,15 @@ void VocalEditorAudioProcessor::setEventGain (const juce::Uuid& id, float gainDb
 {
     if (auto* event = eventList.getById (id))
     {
-        event->gainDb = juce::jlimit (-96.0f, 24.0f, gainDb);
-        if (! event->envelope.isEmpty())
-            for (auto& point : event->envelope)
-                point.gainDb = event->gainDb;
+        const float newGainDb = juce::jlimit (-96.0f, 24.0f, gainDb);
+        const float deltaDb = newGainDb - event->gainDb;
+        event->gainDb = newGainDb;
+
+        // Preserve any user-drawn envelope shape by shifting every point by
+        // the same gain delta instead of flattening the envelope.
+        for (auto& point : event->envelope)
+            point.gainDb = juce::jlimit (-120.0f, 24.0f, point.gainDb + deltaDb);
+
         updateProcessedBuffer();
     }
 }
