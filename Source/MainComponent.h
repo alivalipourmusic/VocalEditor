@@ -7,7 +7,7 @@
 
 //==============================================================================
 /**
-    Main content area: toolbar + timeline + waveform + transport
+    Main content area: toolbar + timeline + waveform + transport + Phase 2 controls
 */
 class MainComponent : public juce::Component,
                       public juce::FileDragAndDropTarget,
@@ -20,7 +20,6 @@ public:
     void paint (juce::Graphics& g) override;
     void resized() override;
 
-    // File drag & drop
     bool isInterestedInFileDrag (const juce::StringArray& files) override;
     void filesDropped (const juce::StringArray& files, int x, int y) override;
 
@@ -34,29 +33,39 @@ private:
     void zoomInClicked();
     void zoomOutClicked();
     void zoomFitClicked();
+    void createEventClicked();
+    void undoClicked();
+    void redoClicked();
+    void gainSliderChanged();
 
     VocalEditorAudioProcessor& processor;
 
-    // UI Components
-    juce::TextButton openButton { "Open" };
-    juce::TextButton playButton { "Play" };
-    juce::TextButton stopButton { "Stop" };
-    juce::TextButton zoomInButton { "+" };
+    // Transport / file
+    juce::TextButton openButton  { "Open" };
+    juce::TextButton playButton  { "Play" };
+    juce::TextButton stopButton  { "Stop" };
+    juce::TextButton zoomInButton  { "+" };
     juce::TextButton zoomOutButton { "-" };
     juce::TextButton zoomFitButton { "Fit" };
-    
+
+    // Phase 2
+    juce::TextButton createEventButton { "Create Event" };
+    juce::TextButton undoButton { "Undo" };
+    juce::TextButton redoButton { "Redo" };
+    juce::Slider gainSlider;
+    juce::Label  gainLabel;
+
     juce::Label titleLabel;
     juce::Label statusLabel;
     juce::Label timeLabel;
-    
+
     TimelineComponent timeline;
     WaveformComponent waveform;
 
-    // Colors matching product design
-    juce::Colour bgColour       { 0xff0f172a };
-    juce::Colour panelColour    { 0xff1e293b };
-    juce::Colour accentColour   { 0xff2dd4bf };
-    juce::Colour textColour     { 0xffe2e8f0 };
+    juce::Colour bgColour     { 0xff0f172a };
+    juce::Colour panelColour  { 0xff1e293b };
+    juce::Colour accentColour { 0xff2dd4bf };
+    juce::Colour textColour   { 0xffe2e8f0 };
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (MainComponent)
 };
