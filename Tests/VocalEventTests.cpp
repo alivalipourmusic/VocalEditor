@@ -210,7 +210,7 @@ namespace
         shortWord.gainTransitionInMs = 10.0;
         shortWord.gainTransitionOutMs = 10.0;
         VocalAudioMath::applyEventToBuffer (shortWord, shortAudio, sampleRate);
-        check (near (shortAudio.getSample (0, 2040 + 119), boosted),
+        check (near (shortAudio.getSample (0, 1920 + 119), boosted),
                "overlong transitions are fitted so a short word can still reach its target boost");
     }
 
