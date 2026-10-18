@@ -190,6 +190,39 @@ namespace
         }
     }
 
+    void testTimelineValidation()
+    {
+        const std::vector<std::pair<double, double>> valid {
+            { 0.0, 0.5 }, { 0.5, 1.0 }, { 1.2, 1.5 }
+        };
+        check (VocalAudioMath::isValidNonOverlappingTimeline (valid, 2.0),
+               "timeline accepts valid, touching and separated events");
+
+        const std::vector<std::pair<double, double>> overlapping {
+            { 0.0, 0.6 }, { 0.5, 0.9 }
+        };
+        check (! VocalAudioMath::isValidNonOverlappingTimeline (overlapping, 2.0),
+               "timeline rejects overlapping events");
+
+        const std::vector<std::pair<double, double>> outOfRange {
+            { 0.0, 1.1 }
+        };
+        check (! VocalAudioMath::isValidNonOverlappingTimeline (outOfRange, 1.0),
+               "timeline rejects events extending beyond source duration");
+
+        const std::vector<std::pair<double, double>> invalid {
+            { 0.5, 0.5 }
+        };
+        check (! VocalAudioMath::isValidNonOverlappingTimeline (invalid, 1.0),
+               "timeline rejects zero-length events");
+
+        const std::vector<std::pair<double, double>> nonFinite {
+            { 0.0, std::numeric_limits<double>::infinity() }
+        };
+        check (! VocalAudioMath::isValidNonOverlappingTimeline (nonFinite, 1.0),
+               "timeline rejects non-finite event endpoints");
+    }
+
     void testIntervalOverlapRules()
     {
         check (VocalAudioMath::intervalsOverlap (0.0, 1.0, 0.5, 1.5),
@@ -266,6 +299,7 @@ int main()
     testLinearInterpolation();
     testFadeEndpointsAndShortEvents();
     testIntervalOverlapRules();
+    testTimelineValidation();
     testMergeEnvelopeBoundaryCompatibility();
     testSignalLevelGainAndFadeRendering();
 
