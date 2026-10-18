@@ -228,3 +228,11 @@ ctest --test-dir build -C Release --output-on-failure
 - [x] Use named transactions and coalesce rapid gain/fade edits into one undoable gesture within the configured time window; reset coalescing state when project history is cleared.
 - [x] Reject non-finite or invalid playback/selection positions during project-state restoration before changing the live session.
 - [ ] Await Windows CI build and regression test results. The prior runner/configuration failure is fixed; the first actual compile exposed API mismatches which are now corrected, but a successful build is not yet confirmed.
+
+
+## Phase 16 progress: bounded sample indexing and safer project saves
+
+- [x] Clamp timeline seconds to the audio duration before converting to integer sample indices, preventing undefined behavior for very large finite time values in render/RMS paths.
+- [x] Add regression tests for ordinary conversion, negative values, huge finite values, invalid rates, empty buffers, and round-up behavior.
+- [x] Save project XML to a temporary file and replace the target only after serialization succeeds, reducing the chance of destroying an existing project on interrupted/failed writes.
+- [ ] Windows build and CTest must pass before these changes are considered runtime-verified.
