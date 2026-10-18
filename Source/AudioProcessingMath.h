@@ -153,7 +153,10 @@ namespace VocalAudioMath
         fadeInSamples = clampFadeSamples (fadeInSamples, eventLength);
         fadeOutSamples = clampFadeSamples (fadeOutSamples, eventLength);
 
-        const int total = fadeInSamples + fadeOutSamples;
+        // The two individually valid fade lengths can still overflow int when
+        // added (e.g. very long events near AudioBuffer's index limit).
+        const juce::int64 total = static_cast<juce::int64> (fadeInSamples)
+                                + static_cast<juce::int64> (fadeOutSamples);
         if (total > eventLength && total > 0)
         {
             const double scale = static_cast<double> (eventLength) / static_cast<double> (total);
