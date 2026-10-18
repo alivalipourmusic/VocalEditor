@@ -85,7 +85,7 @@ MainComponent::MainComponent (VocalEditorAudioProcessor& p)
     setupAnalysisSlider (targetLevelSlider, -30.0, -12.0, 1.0, " dB");
     targetLevelSlider.setValue (-18.0, juce::dontSendNotification);
 
-    analysisLabel.setText ("Silence (dB) / Min gap / Padding / Target RMS", juce::dontSendNotification);
+    analysisLabel.setText ("Silence (dB) / Min gap / Padding / Ride target RMS", juce::dontSendNotification);
     analysisLabel.setFont (juce::FontOptions (11.0f));
     analysisLabel.setColour (juce::Label::textColourId, juce::Colour (0xff94a3b8));
     addAndMakeVisible (analysisLabel);
@@ -98,6 +98,7 @@ MainComponent::MainComponent (VocalEditorAudioProcessor& p)
         addAndMakeVisible (btn);
     }
     levelProcessButton.setColour (juce::TextButton::buttonColourId, juce::Colour (0xff155e75));
+    levelProcessButton.setTooltip ("Create a smoothed gain envelope from short RMS windows. Near-silent windows are not boosted.");
     selectedOnlyToggle.setToggleState (false, juce::dontSendNotification);
     selectedOnlyToggle.setColour (juce::ToggleButton::textColourId, textColour);
     selectedOnlyToggle.addKeyListener (this);
@@ -481,8 +482,8 @@ void MainComponent::levelProcessClicked()
     waveform.repaint();
     eventPanel.repaint();
     statusLabel.setText (count > 0
-        ? "Level Process: adjusted " + juce::String (count) + " event(s) toward target RMS."
-        : "Level Process: no eligible non-silent events. Select events or disable Selected only.",
+        ? "Level Ride: created smoothed gain automation for " + juce::String (count) + " event(s)."
+        : "Level Ride: no eligible events. Select events or disable Selected only.",
         juce::dontSendNotification);
 }
 
