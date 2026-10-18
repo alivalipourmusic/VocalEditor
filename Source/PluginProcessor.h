@@ -205,11 +205,17 @@ private:
     float roomTailMaxReductionDb = 8.0f;
     float roomTailSensitivity = 0.65f;
 
+    bool spectralBalanceEnabled = false;
+    float spectralLowDb = 0.0f;
+    float spectralMidDb = 0.0f;
+    float spectralHighDb = 0.0f;
+
     void applyEventToBuffer (const VocalEvent& e, juce::AudioBuffer<float>& buffer);
     void applyDeEsserToBuffer (juce::AudioBuffer<float>& buffer);
     void applyDePlosiveToBuffer (juce::AudioBuffer<float>& buffer);
     void applyNoiseReductionToBuffer (juce::AudioBuffer<float>& buffer);
     void applyRoomTailReductionToBuffer (juce::AudioBuffer<float>& buffer);
+    void applySpectralBalanceToBuffer (juce::AudioBuffer<float>& buffer);
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (VocalEditorAudioProcessor)
 };
