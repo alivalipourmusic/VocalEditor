@@ -17,6 +17,7 @@ namespace VocalAudioMath
 
         return startA < endB - tolerance && startB < endA - tolerance;
     }
+
     inline double fadeCurveValue (double progress, VocalEvent::FadeCurve curve) noexcept
     {
         const double x = juce::jlimit (0.0, 1.0, progress);
@@ -43,7 +44,6 @@ namespace VocalAudioMath
         }
     }
 
-    // Both fades reach their exact endpoints, including very short regions.
     inline float fadeGainAtSample (int localSample,
                                    int eventLength,
                                    int fadeInSamples,
@@ -73,5 +73,50 @@ namespace VocalAudioMath
         }
 
         return static_cast<float> (gain);
+    }
+
+    // Applies a single event to an already-copied audio buffer. This function
+    // is shared by the processor and signal-level tests.
+    inline void applyEventToBuffer (const VocalEvent& event,
+                                    juce::AudioBuffer<float>& target,
+                                    double sampleRate) noexcept
+    {
+        if (target.getNumSamples() <= 0 || target.getNumChannels() <= 0
+            || ! std::isfinite (sampleRate) || sampleRate <= 0.0
+            || ! std::isfinite (event.startTime) || ! std::isfinite (event.endTime)
+            || event.endTime <= event.startTime)
+            return;
+
+        const int totalSamples = target.getNumSamples();
+        const int startSample = juce::jlimit (
+            0, totalSamples, static_cast<int> (std::floor (event.startTime * sampleRate)));
+        const int endSample = juce::jlimit (
+            startSample, totalSamples, static_cast<int> (std::ceil (event.endTime * sampleRate)));
+        const int eventLength = endSample - startSample;
+        if (eventLength <= 0)
+            return;
+
+        int fadeInSamples = static_cast<int> (std::round (event.fadeInMs * 0.001 * sampleRate));
+        int fadeOutSamples = static_cast<int> (std::round (event.fadeOutMs * 0.001 * sampleRate));
+        fitFadesToEvent (eventLength, fadeInSamples, fadeOutSamples);
+
+        for (int sample = startSample; sample < endSample; ++sample)
+        {
+            const int localSample = sample - startSample;
+            const double normalized = eventLength > 1
+                ? static_cast<double> (localSample) / static_cast<double> (eventLength - 1)
+                : 0.0;
+            const float envelopeDb = event.envelope.isEmpty()
+                ? event.gainDb
+                : event.getEnvelopeGainDb (static_cast<float> (normalized));
+            const float gain = juce::Decibels::decibelsToGain (envelopeDb);
+            const float fadeGain = fadeGainAtSample (
+                localSample, eventLength, fadeInSamples, fadeOutSamples,
+                event.fadeInCurve, event.fadeOutCurve);
+            const float totalGain = gain * fadeGain;
+
+            for (int channel = 0; channel < target.getNumChannels(); ++channel)
+                target.setSample (channel, sample, target.getSample (channel, sample) * totalGain);
+        }
     }
 }
