@@ -199,6 +199,19 @@ namespace
                "smooth gain-in starts with no additional boost");
         check (near (VocalAudioMath::dynamicGainWindowAtSample (99, 100, 0, 20), 0.0f),
                "smooth gain-out ends with no additional boost");
+
+        juce::AudioBuffer<float> shortAudio (1, totalSamples);
+        for (int i = 0; i < totalSamples; ++i)
+            shortAudio.setSample (0, i, base);
+        VocalEvent shortWord;
+        shortWord.startTime = 0.04;
+        shortWord.endTime = 0.045; // 5 ms, shorter than the requested ramps combined.
+        shortWord.dynamicGainDb = 6.0f;
+        shortWord.gainTransitionInMs = 10.0;
+        shortWord.gainTransitionOutMs = 10.0;
+        VocalAudioMath::applyEventToBuffer (shortWord, shortAudio, sampleRate);
+        check (near (shortAudio.getSample (0, 2040 + 119), boosted),
+               "overlong transitions are fitted so a short word can still reach its target boost");
     }
 
     void testSplitEnvelopeSlicesPreserveAutomation()
