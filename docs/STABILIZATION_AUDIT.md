@@ -89,6 +89,16 @@ ctest --test-dir build -C Release --output-on-failure
 - [ ] Review undo transaction grouping for continuous slider drags and memory use on sessions with many events.
 - [ ] Finish merge semantics and edge cases, including near-zero gaps and envelopes with missing endpoints.
 
+## Phase 4 progress: processed audio export
+
+- [x] Implement export of the processed audio snapshot to 24-bit WAV or AIFF.
+- [x] Snapshot the published processed buffer through the reader-counter protocol before file writing.
+- [x] Reject missing audio, unsupported extensions, invalid output paths, and attempts to overwrite the source file.
+- [x] Add an Export Audio dialog and visible success/failure status.
+- [ ] Build and test writer API compatibility, channel counts, sample rates, output metadata, and actual file readability.
+- [ ] Add selectable bit depth/sample format and an explicit peak/clip report in a later pass.
+- [ ] Add automated tests that compare exported samples against the processed snapshot.
+
 ## Validation checklist
 
 - [ ] Configure and build Release on Windows with the documented Visual Studio/CMake setup.
