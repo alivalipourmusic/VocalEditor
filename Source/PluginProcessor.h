@@ -123,6 +123,13 @@ public:
 
     void updateProcessedBuffer();
 
+    void setDeEsserEnabled (bool enabled);
+    bool isDeEsserEnabled() const { return deEsserEnabled; }
+    void setDeEsserParameters (float frequencyHz, float thresholdDb, float maxReductionDb);
+    float getDeEsserFrequency() const { return deEsserFrequencyHz; }
+    float getDeEsserThreshold() const { return deEsserThresholdDb; }
+    float getDeEsserMaxReduction() const { return deEsserMaxReductionDb; }
+
 private:
     juce::AudioFormatManager formatManager;
     juce::AudioThumbnailCache thumbnailCache { 5 };
@@ -150,6 +157,11 @@ private:
     juce::Array<juce::Uuid> selectedEventIds;
 
     juce::UndoManager undoManager;
+
+    bool deEsserEnabled = false;
+    float deEsserFrequencyHz = 6500.0f;
+    float deEsserThresholdDb = -28.0f;
+    float deEsserMaxReductionDb = 6.0f;
 
     void applyEventToBuffer (const VocalEvent& e, juce::AudioBuffer<float>& buffer);
 
