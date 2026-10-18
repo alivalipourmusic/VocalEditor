@@ -164,6 +164,7 @@ private:
     float deEsserMaxReductionDb = 6.0f;
 
     void applyEventToBuffer (const VocalEvent& e, juce::AudioBuffer<float>& buffer);
+    void applyDeEsserToBuffer (juce::AudioBuffer<float>& buffer);
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (VocalEditorAudioProcessor)
 };
