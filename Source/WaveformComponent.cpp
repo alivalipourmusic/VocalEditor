@@ -10,6 +10,7 @@ WaveformComponent::WaveformComponent (VocalEditorAudioProcessor& p)
     thumbnail->addChangeListener (this);
     
     setOpaque (true);
+    setWantsKeyboardFocus (true);
     startTimerHz (30); // for playhead updates
 }
 
@@ -315,6 +316,7 @@ double WaveformComponent::xToTime (float x) const
 //==============================================================================
 void WaveformComponent::mouseDown (const juce::MouseEvent& e)
 {
+    grabKeyboardFocus();
     if (! processor.hasAudio())
         return;
 
