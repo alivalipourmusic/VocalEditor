@@ -268,9 +268,18 @@ ctest --test-dir build -C Release --output-on-failure
 - [x] Preserve the existing internal gain curve when splitting an already-dynamic event by disabling the newly-created internal edge ramps.
 - [x] Reject merges where dynamic-gain shaping would be lost, rather than silently flattening the transition.
 - [x] Add signal-level regression tests for entry ramp, full-gain body, exit ramp, unchanged samples outside the event, and RMS accounting.
-- [ ] Confirm Windows compilation and CTest on the latest commit.
+- [x] Confirm Windows compilation and CTest on commit `6d6996d` via GitHub Actions; both plugin/app build and regression tests passed.
 - [ ] Listen-test perceived word joins on real vocal material in Standalone and Cubase; numerical tests do not replace listening.
 
 ### Usage notes
 
 Set **Word Dynamics** to the extra gain you want at the centre of the selected word (for example +3 to +6 dB). Set **Soft Gain In** and **Soft Gain Out** to shape how quickly that additional boost rises and returns to the event's existing gain curve. These are gain-automation transitions, not fades to silence, so they do not mute the word edges. A zero duration disables that side's smoothing. The settings are independent of the existing Fade In/Out controls.
+
+
+## Phase 20: Undo/Redo and session-state hardening
+
+- [ ] Add focused regression coverage for event-state snapshots: all gain/fade/dynamic fields and envelope points survive capture/restore.
+- [ ] Verify undo/redo across split, delete, gain, fade, and dynamic-gain edits, including rapid coalesced slider movements.
+- [ ] Verify invalid or duplicate IDs, invalid envelope points, out-of-range transitions, and overlapping intervals fail atomically without mutating the live event list.
+- [ ] Verify project save/load preserves dynamic-gain settings and selection while legacy projects default missing fields safely.
+- [ ] Keep the message-thread/audio-thread boundary under review; do not claim Cubase runtime safety until stress-tested in a real host.
