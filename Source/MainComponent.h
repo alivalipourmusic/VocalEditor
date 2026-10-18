@@ -10,6 +10,16 @@
 /**
     Main content area: toolbar + timeline + waveform + transport + Phase 2 controls
 */
+class ScaledTextButtonLookAndFeel : public juce::LookAndFeel_V4
+{
+public:
+    juce::Font getTextButtonFont (juce::TextButton&, int buttonHeight) override
+    {
+        const auto fontHeight = juce::jlimit (10.0f, 24.0f, static_cast<float> (buttonHeight) * 0.42f);
+        return juce::FontOptions (fontHeight);
+    }
+};
+
 class MainComponent : public juce::Component,
                       public juce::FileDragAndDropTarget,
                       public juce::KeyListener,
@@ -50,6 +60,9 @@ private:
     void comparisonButtonClicked();
 
     VocalEditorAudioProcessor& processor;
+
+    // Custom LookAndFeel must outlive all TextButtons.
+    ScaledTextButtonLookAndFeel scaledButtonLookAndFeel;
 
     // Transport / file
     juce::TextButton openButton  { "Open" };
