@@ -96,6 +96,15 @@ The project currently has no dedicated test target visible in the inspected CMak
 - [ ] Compile and execute tests on Windows; no passing run is claimed.
 - [ ] Add processor-level tests for the complete Undo/Redo lifecycle and confirm failed project loads preserve the prior project state.
 
+## Phase 10 progress: audio snapshot publication
+
+- [x] Store source sample rate alongside each published immutable processed-audio snapshot; the audio callback reads the rate belonging to the snapshot it pinned, not a global rate that may already describe a newly loaded file.
+- [x] Track failed snapshot publication when all non-active buffers are temporarily pinned, instead of silently discarding the render update.
+- [x] Retry pending publication from the editor timer on the message thread.
+- [x] Prevent export from knowingly using a stale render: retry once and return a clear error if the pending snapshot still cannot be published.
+- [ ] Add stress tests for concurrent render readers and repeated source-file/sample-rate changes.
+- [ ] Compile and run Windows tests; this change has not yet been build-verified.
+
 ## Status clarification
 
 Earlier sections describe findings from the initial audit snapshot. Since then, state serialization, safer staged import, event snapshot undo actions, processed audio export, and the sample-rate separation above have been added on this branch. The outstanding items in the validation checklist remain unverified until a real build and tests run.
