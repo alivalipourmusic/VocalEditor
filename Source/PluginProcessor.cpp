@@ -1217,9 +1217,7 @@ void VocalEditorAudioProcessor::mergeEvents (const juce::Uuid& idA, const juce::
         if (sourceLength <= 0.0)
             return;
 
-        const auto points = source.envelope.isEmpty()
-            ? juce::Array<VocalEvent::EnvelopePoint>()
-            : source.envelope;
+        const auto points = source.makeEnvelopeSlice (0.0f, 1.0f);
 
         auto addUnique = [&combinedEnvelope] (float t, float value)
         {
