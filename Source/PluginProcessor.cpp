@@ -341,6 +341,13 @@ bool VocalEditorAudioProcessor::restoreStateFromXml (const juce::XmlElement& xml
                 return false;
             }
 
+            for (const auto& existing : stagedEvents)
+                if (existing.id == data.id)
+                {
+                    errorMessage = "The project contains duplicate event IDs.";
+                    return false;
+                }
+
             data.type = static_cast<VocalEvent::Type> (type);
             data.fadeInCurve = static_cast<VocalEvent::FadeCurve> (fadeInCurve);
             data.fadeOutCurve = static_cast<VocalEvent::FadeCurve> (fadeOutCurve);
@@ -399,7 +406,35 @@ bool VocalEditorAudioProcessor::restoreStateFromXml (const juce::XmlElement& xml
         stagedSampleRate = reader->sampleRate;
     }
 
-    // Commit only after the XML and source audio have passed validation.
+    // Validate the complete event timeline against the staged source before
+    // committing any project state. This keeps failed loads fully atomic.
+    const double stagedDuration = stagedAudio.getNumSamples() > 0
+        ? static_cast<double> (stagedAudio.getNumSamples()) / stagedSampleRate : 0.0;
+
+    for (size_t i = 0; i < stagedEvents.size(); ++i)
+    {
+        const auto& event = stagedEvents[i];
+        const double length = event.end - event.start;
+
+        if (event.end > stagedDuration + 1.0e-6
+            || event.fadeInMs > length * 500.0 + 1.0e-6
+            || event.fadeOutMs > length * 500.0 + 1.0e-6)
+        {
+            errorMessage = "The project contains an event outside the source audio or invalid fades.";
+            return false;
+        }
+
+        for (size_t j = i + 1; j < stagedEvents.size(); ++j)
+            if (VocalAudioMath::intervalsOverlap (event.start, event.end,
+                                                   stagedEvents[j].start, stagedEvents[j].end))
+            {
+                errorMessage = "The project contains overlapping events.";
+                return false;
+            }
+    }
+
+    // Commit only after the XML, source audio, and complete event timeline
+    // have passed validation.
     audioBuffer = std::move (stagedAudio);
     audioAvailable.store (audioBuffer.getNumSamples() > 0, std::memory_order_release);
     currentAudioFile = stagedAudioFile;
