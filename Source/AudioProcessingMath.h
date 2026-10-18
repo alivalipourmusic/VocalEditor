@@ -9,6 +9,27 @@
 
 namespace VocalAudioMath
 {
+    // Convert timeline seconds to a bounded sample index without casting an
+    // arbitrarily large finite double to int (which can overflow/trigger UB).
+    inline int timeToSampleIndex (double seconds, double sampleRate, int totalSamples,
+                                  bool roundUp = false) noexcept
+    {
+        if (totalSamples <= 0 || ! std::isfinite (seconds) || seconds <= 0.0
+            || ! std::isfinite (sampleRate) || sampleRate <= 0.0)
+            return 0;
+
+        const double duration = static_cast<double> (totalSamples) / sampleRate;
+        if (! std::isfinite (duration) || seconds >= duration)
+            return totalSamples;
+
+        const double position = seconds * sampleRate;
+        if (! std::isfinite (position) || position <= 0.0)
+            return 0;
+
+        const double rounded = roundUp ? std::ceil (position) : std::floor (position);
+        return juce::jlimit (0, totalSamples, static_cast<int> (rounded));
+    }
+
     inline bool intervalsOverlap (double startA, double endA,
                                   double startB, double endB,
                                   double tolerance = 1.0e-6) noexcept
@@ -168,10 +189,9 @@ namespace VocalAudioMath
             return 0.0;
 
         const int totalSamples = source.getNumSamples();
-        const int start = juce::jlimit (0, totalSamples,
-            static_cast<int> (std::floor (event.startTime * sampleRate)));
-        const int end = juce::jlimit (start, totalSamples,
-            static_cast<int> (std::ceil (event.endTime * sampleRate)));
+        const int start = timeToSampleIndex (event.startTime, sampleRate, totalSamples);
+        const int end = juce::jmax (start,
+            timeToSampleIndex (event.endTime, sampleRate, totalSamples, true));
         const int length = end - start;
         if (length <= 0)
             return 0.0;
@@ -214,10 +234,9 @@ namespace VocalAudioMath
             return;
 
         const int totalSamples = target.getNumSamples();
-        const int startSample = juce::jlimit (
-            0, totalSamples, static_cast<int> (std::floor (event.startTime * sampleRate)));
-        const int endSample = juce::jlimit (
-            startSample, totalSamples, static_cast<int> (std::ceil (event.endTime * sampleRate)));
+        const int startSample = timeToSampleIndex (event.startTime, sampleRate, totalSamples);
+        const int endSample = juce::jmax (startSample,
+            timeToSampleIndex (event.endTime, sampleRate, totalSamples, true));
         const int eventLength = endSample - startSample;
         if (eventLength <= 0)
             return;
