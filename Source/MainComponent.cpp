@@ -17,6 +17,12 @@ MainComponent::MainComponent (VocalEditorAudioProcessor& p)
     titleLabel.setColour (juce::Label::textColourId, accentColour);
     addAndMakeVisible (titleLabel);
 
+    // JUCE TextButton has no setFont(); this LookAndFeel scales its font with button height.
+    for (auto* button : { &openButton, &playButton, &stopButton, &zoomInButton, &zoomOutButton,
+                          &zoomFitButton, &comparisonButton, &createEventButton, &automationButton,
+                          &undoButton, &redoButton, &autoSegmentButton, &levelProcessButton })
+        button->setLookAndFeel (&scaledButtonLookAndFeel);
+
     // Buttons
     openButton.onClick = [this] { openButtonClicked(); };
     playButton.onClick = [this] { playButtonClicked(); };
@@ -301,11 +307,6 @@ void MainComponent::resized()
     const auto S = [scale] (int value) { return juce::roundToInt (static_cast<float> (value) * scale); };
 
     // Scale control typography and value boxes with the editor.
-    const auto buttonFont = juce::FontOptions (static_cast<float> (S (12)));
-    for (auto* button : { &openButton, &playButton, &stopButton, &zoomInButton, &zoomOutButton,
-                          &zoomFitButton, &createEventButton, &automationButton, &undoButton, &redoButton,
-                          &autoSegmentButton, &levelProcessButton })
-        button->setFont (buttonFont);
     titleLabel.setFont (juce::FontOptions (static_cast<float> (S (18)), juce::Font::bold));
     statusLabel.setFont (juce::FontOptions (static_cast<float> (S (12))));
     timeLabel.setFont (juce::FontOptions (static_cast<float> (S (13)), juce::Font::bold));
@@ -481,9 +482,9 @@ void MainComponent::openButtonClicked()
         juce::File{},
         "*.wav;*.aiff;*.aif;*.flac;*.mp3;*.ogg");
 
-    auto flags = juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles;
+    auto chooserFlags = juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles;
 
-    chooser->launchAsync (flags, [this, chooser] (const juce::FileChooser& fc)
+    chooser->launchAsync (chooserFlags, [this, chooser] (const juce::FileChooser& fc)
     {
         auto file = fc.getResult();
         if (file.existsAsFile())
