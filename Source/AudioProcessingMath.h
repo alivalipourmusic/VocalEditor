@@ -252,14 +252,14 @@ namespace VocalAudioMath
         int fadeOut = millisecondsToSamplesClamped (event.fadeOutMs, sampleRate, length);
         fitFadesToEvent (length, fadeIn, fadeOut);
 
+        const int transitionIn = millisecondsToSamplesClamped (event.gainTransitionInMs, sampleRate, length);
+        const int transitionOut = millisecondsToSamplesClamped (event.gainTransitionOutMs, sampleRate, length);
         double sumSquares = 0.0;
         const auto channels = source.getNumChannels();
         for (int i = 0; i < length; ++i)
         {
             const double t = length > 1 ? static_cast<double> (i) / (length - 1) : 0.0;
             const float envelopeDb = event.getEnvelopeGainDb (static_cast<float> (t));
-            const int transitionIn = millisecondsToSamplesClamped (event.gainTransitionInMs, sampleRate, length);
-            const int transitionOut = millisecondsToSamplesClamped (event.gainTransitionOutMs, sampleRate, length);
             const float dynamicWindow = dynamicGainWindowAtSample (i, length, transitionIn, transitionOut);
             const float gain = juce::Decibels::decibelsToGain (
                 envelopeDb + event.dynamicGainDb * dynamicWindow);
@@ -300,6 +300,10 @@ namespace VocalAudioMath
         int fadeInSamples = millisecondsToSamplesClamped (event.fadeInMs, sampleRate, eventLength);
         int fadeOutSamples = millisecondsToSamplesClamped (event.fadeOutMs, sampleRate, eventLength);
         fitFadesToEvent (eventLength, fadeInSamples, fadeOutSamples);
+        const int transitionInSamples = millisecondsToSamplesClamped (
+            event.gainTransitionInMs, sampleRate, eventLength);
+        const int transitionOutSamples = millisecondsToSamplesClamped (
+            event.gainTransitionOutMs, sampleRate, eventLength);
 
         for (int sample = startSample; sample < endSample; ++sample)
         {
@@ -310,10 +314,6 @@ namespace VocalAudioMath
             const float envelopeDb = event.envelope.isEmpty()
                 ? event.gainDb
                 : event.getEnvelopeGainDb (static_cast<float> (normalized));
-            const int transitionInSamples = millisecondsToSamplesClamped (
-                event.gainTransitionInMs, sampleRate, eventLength);
-            const int transitionOutSamples = millisecondsToSamplesClamped (
-                event.gainTransitionOutMs, sampleRate, eventLength);
             const float dynamicWindow = dynamicGainWindowAtSample (
                 localSample, eventLength, transitionInSamples, transitionOutSamples);
             const float gain = juce::Decibels::decibelsToGain (
