@@ -1321,16 +1321,22 @@ bool VocalEditorAudioProcessor::loadAudioFile (const juce::File& file, juce::Str
 
 void VocalEditorAudioProcessor::clearAudio()
 {
+    // Invalidate history before removing the audio that its event snapshots
+    // depend on. Otherwise Undo can attempt to restore events against an
+    // empty timeline and fail, leaving a misleading stale history stack.
+    stopPlayback();
+    undoManager.clearUndoHistory();
+
     audioAvailable.store (false, std::memory_order_release);
     audioBuffer.setSize (0, 0);
     playbackPosition = 0.0;
     playbackSamplePosition = 0;
-    currentlyPlaying = false;
     clearSelection();
     eventList.clear();
     selectedEvent = nullptr;
     selectedEventIds.clear();
     currentAudioFile = {};
+    currentProjectFile = {};
     updateProcessedBuffer();
 }
 
