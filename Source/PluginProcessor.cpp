@@ -1023,7 +1023,17 @@ void VocalEditorAudioProcessor::setEventEnvelopePoint (const juce::Uuid& id, int
 {
     if (auto* event = eventList.getById (id))
     {
-        if (event->locked || pointIndex < 0 || pointIndex >= event->envelope.size())
+        if (event->locked)
+            return;
+
+        if (pointIndex < 0)
+        {
+            event->addOrUpdateEnvelopePoint (t, juce::jlimit (-60.0f, 12.0f, gainDb));
+            updateProcessedBuffer();
+            return;
+        }
+
+        if (pointIndex >= event->envelope.size())
             return;
 
         auto& point = event->envelope.getReference (pointIndex);
