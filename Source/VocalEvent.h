@@ -175,8 +175,11 @@ public:
         for (auto* e : events)
             if (e->overlaps (start, end))
                 result.add (e);
-        result.sort ([] (const VocalEvent* a, const VocalEvent* b)
-                     { return a->startTime < b->startTime ? -1 : 1; });
+        std::sort (result.begin(), result.end(),
+                   [] (const VocalEvent* a, const VocalEvent* b)
+                   {
+                       return a->startTime < b->startTime;
+                   });
         return result;
     }
 

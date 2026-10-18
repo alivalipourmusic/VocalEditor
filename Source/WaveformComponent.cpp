@@ -42,6 +42,7 @@ void WaveformComponent::paint (juce::Graphics& g)
     
     drawGrid (g);
     drawWaveform (g);
+    drawEvents (g);
     drawSelection (g);
     drawPlayhead (g);
 }
@@ -66,6 +67,61 @@ void WaveformComponent::drawWaveform (juce::Graphics& g)
                              visibleStartTime,
                              visibleEndTime,
                              1.0f);
+}
+
+void WaveformComponent::drawEvents (juce::Graphics& g)
+{
+    const auto& events = processor.getEventList().getAll();
+    for (const auto* event : events)
+    {
+        if (event == nullptr || event->endTime <= visibleStartTime || event->startTime >= visibleEndTime)
+            continue;
+
+        const float x1 = static_cast<float> (juce::jlimit (0.0, static_cast<double> (getWidth()), timeToX (event->startTime)));
+        const float x2 = static_cast<float> (juce::jlimit (0.0, static_cast<double> (getWidth()), timeToX (event->endTime)));
+        if (x2 <= x1)
+            continue;
+
+        const bool selected = processor.getSelectedEvent() != nullptr
+                           && processor.getSelectedEvent()->id == event->id;
+        const auto colour = selected ? juce::Colour (0xff0e7490) : juce::Colour (0xff155e75);
+        g.setColour (colour.withAlpha (selected ? 0.28f : 0.16f));
+        g.fillRoundedRectangle (x1, 2.0f, x2 - x1, static_cast<float> (getHeight() - 4), 3.0f);
+        g.setColour (selected ? juce::Colour (0xff67e8f9) : juce::Colour (0xff2dd4bf));
+        g.drawVerticalLine (static_cast<int> (x1), 1.0f, static_cast<float> (getHeight() - 1));
+        g.drawVerticalLine (static_cast<int> (x2), 1.0f, static_cast<float> (getHeight() - 1));
+        drawFadeHandles (g, *event, selected);
+    }
+}
+
+void WaveformComponent::drawFadeHandles (juce::Graphics& g, const VocalEvent& event, bool isSelected)
+{
+    const double fadeInEnd = event.startTime + event.fadeInMs / 1000.0;
+    const double fadeOutStart = event.endTime - event.fadeOutMs / 1000.0;
+    const float xStart = static_cast<float> (timeToX (event.startTime));
+    const float xFadeIn = static_cast<float> (timeToX (fadeInEnd));
+    const float xFadeOut = static_cast<float> (timeToX (fadeOutStart));
+    const float xEnd = static_cast<float> (timeToX (event.endTime));
+    const float yTop = 3.0f;
+    const float yBottom = static_cast<float> (getHeight() - 3);
+
+    g.setColour (fadeHandleColour.withAlpha (isSelected ? 0.95f : 0.5f));
+    if (event.fadeInMs > 0.0)
+    {
+        juce::Path fade;
+        fade.startNewSubPath (xStart, yBottom);
+        fade.lineTo (xFadeIn, yTop);
+        g.strokePath (fade, juce::PathStrokeType (isSelected ? 2.0f : 1.0f));
+        g.fillEllipse (xFadeIn - 3.0f, yTop - 1.0f, 6.0f, 6.0f);
+    }
+    if (event.fadeOutMs > 0.0)
+    {
+        juce::Path fade;
+        fade.startNewSubPath (xFadeOut, yTop);
+        fade.lineTo (xEnd, yBottom);
+        g.strokePath (fade, juce::PathStrokeType (isSelected ? 2.0f : 1.0f));
+        g.fillEllipse (xFadeOut - 3.0f, yTop - 1.0f, 6.0f, 6.0f);
+    }
 }
 
 void WaveformComponent::drawSelection (juce::Graphics& g)
@@ -214,6 +270,12 @@ void WaveformComponent::mouseDrag (const juce::MouseEvent& e)
     }
     
     repaint();
+}
+
+void WaveformComponent::mouseMove (const juce::MouseEvent& e)
+{
+    juce::ignoreUnused (e);
+    // Hover feedback can be added once fade-handle hit testing is implemented.
 }
 
 void WaveformComponent::mouseUp (const juce::MouseEvent& e)
@@ -369,6 +431,5 @@ void WaveformComponent::changeListenerCallback (juce::ChangeBroadcaster* source)
 
 void WaveformComponent::timerCallback()
 {
-    if (processor.isPlaying())
-        repaint();
+    repaint();
 }

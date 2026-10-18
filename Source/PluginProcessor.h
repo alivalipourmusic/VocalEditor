@@ -2,6 +2,8 @@
 
 #include <JuceHeader.h>
 #include "VocalEvent.h"
+#include <array>
+#include <atomic>
 
 //==============================================================================
 class VocalEditorAudioProcessor : public juce::AudioProcessor
@@ -59,10 +61,14 @@ public:
     juce::AudioThumbnailCache& getThumbnailCache() { return thumbnailCache; }
 
     void setPlaybackPosition (double positionInSeconds);
+    void setProcessingBypassed (bool bypassed);
+    bool isProcessingBypassed() const { return processingBypassed; }
     double getPlaybackPosition() const { return playbackPosition; }
     void startPlayback();
     void stopPlayback();
     bool isPlaying() const { return currentlyPlaying; }
+    void setComparisonMode (bool enabled);
+    bool isComparisonMode() const { return comparisonMode; }
 
     struct Selection
     {
@@ -111,6 +117,7 @@ public:
     };
 
     int autoSegmentFromSilence (const SegmentParams& params = {});
+    int levelEventsToTarget (float targetDb, bool selectedOnly = true);
 
     juce::UndoManager& getUndoManager() { return undoManager; }
     void undo() { undoManager.undo(); }
@@ -120,13 +127,53 @@ public:
 
     void updateProcessedBuffer();
 
+    void setDeEsserEnabled (bool enabled);
+    bool isDeEsserEnabled() const { return deEsserEnabled; }
+    void setDeEsserParameters (float frequencyHz, float thresholdDb, float maxReductionDb);
+    float getDeEsserFrequency() const { return deEsserFrequencyHz; }
+    float getDeEsserThreshold() const { return deEsserThresholdDb; }
+    float getDeEsserMaxReduction() const { return deEsserMaxReductionDb; }
+
+    void setDePlosiveEnabled (bool enabled);
+    bool isDePlosiveEnabled() const { return dePlosiveEnabled; }
+    void setDePlosiveParameters (float cutoffHz, float thresholdDb, float maxReductionDb);
+    float getDePlosiveCutoff() const { return dePlosiveCutoffHz; }
+    float getDePlosiveThreshold() const { return dePlosiveThresholdDb; }
+    float getDePlosiveMaxReduction() const { return dePlosiveMaxReductionDb; }
+
+    void setNoiseReductionEnabled (bool enabled);
+    bool isNoiseReductionEnabled() const { return noiseReductionEnabled; }
+    void setNoiseReductionParameters (float thresholdDb, float reductionDb, float releaseMs);
+    float getNoiseReductionThreshold() const { return noiseReductionThresholdDb; }
+    float getNoiseReductionAmount() const { return noiseReductionAmountDb; }
+    float getNoiseReductionRelease() const { return noiseReductionReleaseMs; }
+
+    void setRoomTailReductionEnabled (bool enabled);
+    bool isRoomTailReductionEnabled() const { return roomTailReductionEnabled; }
+    void setRoomTailReductionParameters (float thresholdDb, float maxReductionDb, float tailSensitivity);
+    float getRoomTailThreshold() const { return roomTailThresholdDb; }
+    float getRoomTailMaxReduction() const { return roomTailMaxReductionDb; }
+    float getRoomTailSensitivity() const { return roomTailSensitivity; }
+    void setSpectralBalanceEnabled (bool enabled);
+    bool isSpectralBalanceEnabled() const { return spectralBalanceEnabled; }
+    void setSpectralBalanceParameters (float lowDb, float midDb, float highDb);
+    float getSpectralLowDb() const { return spectralLowDb; }
+    float getSpectralMidDb() const { return spectralMidDb; }
+    float getSpectralHighDb() const { return spectralHighDb; }
+
 private:
     juce::AudioFormatManager formatManager;
     juce::AudioThumbnailCache thumbnailCache { 5 };
 
     juce::AudioBuffer<float> audioBuffer;
-    juce::AudioBuffer<float> processedBuffer;
-    bool processedNeedsUpdate = true;
+
+    // Triple-buffered render snapshots: the message thread prepares edits while
+    // the audio thread reads one immutable snapshot without taking a blocking lock.
+    std::array<juce::AudioBuffer<float>, 3> processedBuffers;
+    std::atomic<int> activeProcessedBuffer { 0 };
+    bool comparisonMode = false;
+    bool processingBypassed = false;
+    std::atomic<int> readingProcessedBuffer { -1 };
 
     juce::File currentAudioFile;
     juce::File currentProjectFile;
@@ -144,7 +191,37 @@ private:
 
     juce::UndoManager undoManager;
 
+    bool deEsserEnabled = false;
+    float deEsserFrequencyHz = 6500.0f;
+    float deEsserThresholdDb = -28.0f;
+    float deEsserMaxReductionDb = 6.0f;
+
+    bool dePlosiveEnabled = false;
+    float dePlosiveCutoffHz = 140.0f;
+    float dePlosiveThresholdDb = -24.0f;
+    float dePlosiveMaxReductionDb = 9.0f;
+
+    bool noiseReductionEnabled = false;
+    float noiseReductionThresholdDb = -48.0f;
+    float noiseReductionAmountDb = 18.0f;
+    float noiseReductionReleaseMs = 180.0f;
+
+    bool roomTailReductionEnabled = false;
+    float roomTailThresholdDb = -36.0f;
+    float roomTailMaxReductionDb = 8.0f;
+    float roomTailSensitivity = 0.65f;
+
+    bool spectralBalanceEnabled = false;
+    float spectralLowDb = 0.0f;
+    float spectralMidDb = 0.0f;
+    float spectralHighDb = 0.0f;
+
     void applyEventToBuffer (const VocalEvent& e, juce::AudioBuffer<float>& buffer);
+    void applyDeEsserToBuffer (juce::AudioBuffer<float>& buffer);
+    void applyDePlosiveToBuffer (juce::AudioBuffer<float>& buffer);
+    void applyNoiseReductionToBuffer (juce::AudioBuffer<float>& buffer);
+    void applyRoomTailReductionToBuffer (juce::AudioBuffer<float>& buffer);
+    void applySpectralBalanceToBuffer (juce::AudioBuffer<float>& buffer);
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (VocalEditorAudioProcessor)
 };

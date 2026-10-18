@@ -4,6 +4,7 @@
 #include "PluginProcessor.h"
 #include "WaveformComponent.h"
 #include "TimelineComponent.h"
+#include "SelectedEventPanel.h"
 
 //==============================================================================
 /**
@@ -11,6 +12,7 @@
 */
 class MainComponent : public juce::Component,
                       public juce::FileDragAndDropTarget,
+                      public juce::KeyListener,
                       private juce::Timer
 {
 public:
@@ -22,6 +24,7 @@ public:
 
     bool isInterestedInFileDrag (const juce::StringArray& files) override;
     void filesDropped (const juce::StringArray& files, int x, int y) override;
+    bool keyPressed (const juce::KeyPress& key, juce::Component* originatingComponent) override;
 
     void loadFile (const juce::File& file);
 
@@ -37,6 +40,14 @@ private:
     void undoClicked();
     void redoClicked();
     void gainSliderChanged();
+    void autoSegmentClicked();
+    void levelProcessClicked();
+    void deEsserChanged();
+    void dePlosiveChanged();
+    void noiseReductionChanged();
+    void roomTailReductionChanged();
+    void spectralBalanceChanged();
+    void comparisonButtonClicked();
 
     VocalEditorAudioProcessor& processor;
 
@@ -47,11 +58,41 @@ private:
     juce::TextButton zoomInButton  { "+" };
     juce::TextButton zoomOutButton { "-" };
     juce::TextButton zoomFitButton { "Fit" };
+    juce::TextButton comparisonButton { "FX: ON" };
 
     // Phase 2
     juce::TextButton createEventButton { "Create Event" };
     juce::TextButton undoButton { "Undo" };
     juce::TextButton redoButton { "Redo" };
+    juce::TextButton autoSegmentButton { "Auto Segment" };
+    juce::TextButton levelProcessButton { "Level Process" };
+    juce::Slider thresholdSlider;
+    juce::Slider silenceSlider;
+    juce::Slider paddingSlider;
+    juce::Slider targetLevelSlider;
+    juce::ToggleButton deEsserToggle { "De-Esser" };
+    juce::Slider deEsserFrequencySlider;
+    juce::Slider deEsserThresholdSlider;
+    juce::Slider deEsserReductionSlider;
+    juce::ToggleButton dePlosiveToggle { "De-Plosive" };
+    juce::Slider dePlosiveCutoffSlider;
+    juce::Slider dePlosiveThresholdSlider;
+    juce::Slider dePlosiveReductionSlider;
+    juce::ToggleButton noiseReductionToggle { "Noise Reduction" };
+    juce::Slider noiseReductionThresholdSlider;
+    juce::Slider noiseReductionAmountSlider;
+    juce::Slider noiseReductionReleaseSlider;
+    juce::ToggleButton roomTailReductionToggle { "Room Tail" };
+    juce::Slider roomTailThresholdSlider;
+    juce::Slider roomTailReductionSlider;
+    juce::Slider roomTailSensitivitySlider;
+    juce::ToggleButton spectralBalanceToggle { "Spectral Balance" };
+    juce::Slider spectralLowSlider;
+    juce::Slider spectralMidSlider;
+    juce::Slider spectralHighSlider;
+    juce::ToggleButton selectedOnlyToggle { "Selected only" };
+    juce::ComboBox segmentTypeCombo;
+    juce::Label analysisLabel;
     juce::Slider gainSlider;
     juce::Label  gainLabel;
 
@@ -61,6 +102,7 @@ private:
 
     TimelineComponent timeline;
     WaveformComponent waveform;
+    SelectedEventPanel eventPanel;
 
     juce::Colour bgColour     { 0xff0f172a };
     juce::Colour panelColour  { 0xff1e293b };
