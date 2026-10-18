@@ -175,8 +175,18 @@ public:
         for (auto* e : events)
             if (e->overlaps (start, end))
                 result.add (e);
-        result.sort ([] (const VocalEvent* a, const VocalEvent* b)
-                     { return a->startTime < b->startTime ? -1 : 1; });
+
+        struct
+        {
+            int compareElements (const VocalEvent* first, const VocalEvent* second) const
+            {
+                if (first->startTime < second->startTime) return -1;
+                if (first->startTime > second->startTime) return 1;
+                return 0;
+            }
+        } comparator;
+
+        result.sort (comparator);
         return result;
     }
 

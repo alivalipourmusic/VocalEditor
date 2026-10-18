@@ -60,7 +60,7 @@ SelectedEventPanel::SelectedEventPanel (VocalEditorAudioProcessor& p)
     splitButton.onClick = [this] { splitClicked(); };
     deleteButton.onClick = [this] { deleteClicked(); };
 
-    for (auto* btn : { &splitButton, &deleteButton })
+    for (juce::TextButton* btn : { &splitButton, &deleteButton })
     {
         btn->setColour (juce::TextButton::buttonColourId, bgColour.brighter());
         btn->setColour (juce::TextButton::textColourOffId, textColour);
@@ -104,10 +104,18 @@ void SelectedEventPanel::resized()
     emptyLabel.setVisible (! hasEvent);
     emptyLabel.setBounds (r);
 
-    for (auto* c : { (juce::Component*) &typeLabel, &timeLabel, &lengthLabel,
-                     &gainLabel, &gainSlider, &resetGainButton,
-                     &fadeInLabel, &fadeInSlider, &fadeOutLabel, &fadeOutSlider,
-                     &splitButton, &deleteButton })
+    for (juce::Component* c : { static_cast<juce::Component*> (&typeLabel),
+                                static_cast<juce::Component*> (&timeLabel),
+                                static_cast<juce::Component*> (&lengthLabel),
+                                static_cast<juce::Component*> (&gainLabel),
+                                static_cast<juce::Component*> (&gainSlider),
+                                static_cast<juce::Component*> (&resetGainButton),
+                                static_cast<juce::Component*> (&fadeInLabel),
+                                static_cast<juce::Component*> (&fadeInSlider),
+                                static_cast<juce::Component*> (&fadeOutLabel),
+                                static_cast<juce::Component*> (&fadeOutSlider),
+                                static_cast<juce::Component*> (&splitButton),
+                                static_cast<juce::Component*> (&deleteButton) })
         c->setVisible (hasEvent);
 
     if (! hasEvent)
