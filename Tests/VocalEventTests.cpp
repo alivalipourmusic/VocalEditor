@@ -1,5 +1,6 @@
 #include "VocalEvent.h"
 #include "AudioResampling.h"
+#include "AudioProcessingMath.h"
 
 #include <cmath>
 #include <iostream>
@@ -94,6 +95,40 @@ namespace
                "invalid channels return silence");
     }
 
+    void testFadeEndpointsAndShortEvents()
+    {
+        int fadeIn = 8, fadeOut = 8;
+        VocalAudioMath::fitFadesToEvent (10, fadeIn, fadeOut);
+        check (fadeIn + fadeOut == 10, "overlapping fades are proportionally fitted to the event");
+        check (fadeIn >= 0 && fadeOut >= 0, "fitted fade lengths never become negative");
+
+        check (near (VocalAudioMath::fadeGainAtSample (
+                         0, 8, 4, 3, VocalEvent::FadeCurve::Linear, VocalEvent::FadeCurve::Linear),
+                     0.0f),
+               "fade-in starts at exact silence");
+        check (near (VocalAudioMath::fadeGainAtSample (
+                         3, 8, 4, 3, VocalEvent::FadeCurve::Linear, VocalEvent::FadeCurve::Linear),
+                     1.0f),
+               "fade-in reaches unity at its last sample when not overlapped");
+        check (near (VocalAudioMath::fadeGainAtSample (
+                         5, 8, 4, 3, VocalEvent::FadeCurve::Linear, VocalEvent::FadeCurve::Linear),
+                     1.0f),
+               "fade-out begins at unity at its first sample");
+        check (near (VocalAudioMath::fadeGainAtSample (
+                         7, 8, 4, 3, VocalEvent::FadeCurve::Linear, VocalEvent::FadeCurve::Linear),
+                     0.0f),
+               "fade-out reaches exact silence at the last sample");
+
+        check (near (VocalAudioMath::fadeGainAtSample (
+                         0, 1, 1, 0, VocalEvent::FadeCurve::Smooth, VocalEvent::FadeCurve::Smooth),
+                     0.0f),
+               "one-sample fade-in avoids division by zero and reaches silence");
+        check (near (VocalAudioMath::fadeGainAtSample (
+                         0, 1, 0, 1, VocalEvent::FadeCurve::Smooth, VocalEvent::FadeCurve::Smooth),
+                     0.0f),
+               "one-sample fade-out avoids division by zero and reaches silence");
+    }
+
     void testEmptyEnvelopeAndInvalidRanges()
     {
         VocalEvent event;
@@ -122,6 +157,7 @@ int main()
     testEmptyEnvelopeAndInvalidRanges();
     testSampleRateMappingAcrossRates();
     testLinearInterpolation();
+    testFadeEndpointsAndShortEvents();
 
     if (failures == 0)
     {
