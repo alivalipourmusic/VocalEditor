@@ -537,9 +537,7 @@ void VocalEditorAudioProcessor::updateProcessedBuffer()
     if (audioBuffer.getNumSamples() <= 0 || audioBuffer.getNumChannels() <= 0)
     {
         target.setSize (0, 0);
-        applyDeEsserToBuffer (target);
-        applyDePlosiveToBuffer (target);
-    activeProcessedBuffer.store (targetIndex, std::memory_order_release);
+        activeProcessedBuffer.store (targetIndex, std::memory_order_release);
         return;
     }
 
@@ -548,6 +546,11 @@ void VocalEditorAudioProcessor::updateProcessedBuffer()
     for (const auto* event : eventList.getAll())
         if (event != nullptr)
             applyEventToBuffer (*event, target);
+
+    // Cleanup is applied after event edits so it affects the actual rendered
+    // audio rather than being overwritten by event-level sample replacement.
+    applyDeEsserToBuffer (target);
+    applyDePlosiveToBuffer (target);
 
     activeProcessedBuffer.store (targetIndex, std::memory_order_release);
 }
