@@ -43,6 +43,7 @@ private:
     void autoSegmentClicked();
     void levelProcessClicked();
     void deEsserChanged();
+    void dePlosiveChanged();
 
     VocalEditorAudioProcessor& processor;
 
@@ -68,6 +69,10 @@ private:
     juce::Slider deEsserFrequencySlider;
     juce::Slider deEsserThresholdSlider;
     juce::Slider deEsserReductionSlider;
+    juce::ToggleButton dePlosiveToggle { "De-Plosive" };
+    juce::Slider dePlosiveCutoffSlider;
+    juce::Slider dePlosiveThresholdSlider;
+    juce::Slider dePlosiveReductionSlider;
     juce::ToggleButton selectedOnlyToggle { "Selected only" };
     juce::ComboBox segmentTypeCombo;
     juce::Label analysisLabel;
