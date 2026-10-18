@@ -77,6 +77,18 @@ ctest --test-dir build -C Release --output-on-failure
 - [ ] Project files currently reference the source audio by absolute path; moving the audio file can break relinking. Portable project media packaging is a later task.
 - [ ] Review full audio-thread/UI-thread ownership of waveform and event model access; the current changes do not claim the entire application is race-free.
 
+## Phase 3 progress: edit history
+
+- [x] Add snapshot-based undo actions for create/delete, gain, fades, split, auto-segment, and Level Process.
+- [x] Add multi-event deletion and a conservative merge operation for same-type events with a gap no larger than 5 ms.
+- [x] Refresh waveform/timeline/selection UI after Undo/Redo.
+- [x] Fix shortcut precedence so Ctrl+Shift+O opens a project instead of being caught by Ctrl+O first.
+- [x] Add Delete/Backspace handling for selected events.
+- [ ] Compile and execute tests; no successful build is claimed yet.
+- [ ] Add processor-level automated tests for undo/redo ordering, envelope round trips, and locked-event behavior.
+- [ ] Review undo transaction grouping for continuous slider drags and memory use on sessions with many events.
+- [ ] Finish merge semantics and edge cases, including near-zero gaps and envelopes with missing endpoints.
+
 ## Validation checklist
 
 - [ ] Configure and build Release on Windows with the documented Visual Studio/CMake setup.
