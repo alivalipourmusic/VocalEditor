@@ -3,6 +3,8 @@
 #include <JuceHeader.h>
 #include "VocalEvent.h"
 #include <cmath>
+#include <utility>
+#include <vector>
 
 namespace VocalAudioMath
 {
@@ -16,6 +18,28 @@ namespace VocalAudioMath
             return false;
 
         return startA < endB - tolerance && startB < endA - tolerance;
+    }
+
+    inline bool isValidNonOverlappingTimeline (
+        const std::vector<std::pair<double, double>>& intervals,
+        double duration,
+        double tolerance = 1.0e-6) noexcept
+    {
+        if (! std::isfinite (duration) || duration < 0.0)
+            return false;
+
+        for (size_t i = 0; i < intervals.size(); ++i)
+        {
+            const auto [start, end] = intervals[i];
+            if (! std::isfinite (start) || ! std::isfinite (end)
+                || start < 0.0 || end <= start || end > duration + tolerance)
+                return false;
+
+            for (size_t j = i + 1; j < intervals.size(); ++j)
+                if (intervalsOverlap (start, end, intervals[j].first, intervals[j].second, tolerance))
+                    return false;
+        }
+        return true;
     }
 
     inline bool canJoinEnvelopeAtBoundary (const VocalEvent& left,
