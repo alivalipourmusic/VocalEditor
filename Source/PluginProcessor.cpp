@@ -611,6 +611,7 @@ void VocalEditorAudioProcessor::updateProcessedBuffer()
         processedBufferSampleRates[static_cast<size_t> (targetIndex)] =
             currentSampleRate.load (std::memory_order_acquire);
         activeProcessedBuffer.store (targetIndex, std::memory_order_release);
+        processedBufferUpdateRetryBlocked.store (false, std::memory_order_release);
         processedBufferUpdatePending.store (false, std::memory_order_release);
         return;
     }
@@ -649,6 +650,34 @@ void VocalEditorAudioProcessor::updateProcessedBuffer()
     activeProcessedBuffer.store (targetIndex, std::memory_order_release);
     processedBufferUpdateRetryBlocked.store (false, std::memory_order_release);
     processedBufferUpdatePending.store (false, std::memory_order_release);
+}
+
+void VocalEditorAudioProcessor::reclaimUnusedProcessedBufferMemory()
+{
+    // Call only from the message thread. The active snapshot is immutable and
+    // must remain allocated; reader counters protect snapshots pinned by the
+    // audio callback or export operation.
+    const int active = activeProcessedBuffer.load (std::memory_order_acquire);
+    const int sourceSamples = audioBuffer.getNumSamples();
+    const int sourceChannels = audioBuffer.getNumChannels();
+
+    for (int i = 0; i < static_cast<int> (processedBuffers.size()); ++i)
+    {
+        if (i == active
+            || processedBufferReaders[static_cast<size_t> (i)].load (std::memory_order_acquire) != 0)
+            continue;
+
+        auto& buffer = processedBuffers[static_cast<size_t> (i)];
+        const bool obsolete = sourceSamples == 0 || sourceChannels == 0
+            || buffer.getNumSamples() > sourceSamples
+            || buffer.getNumChannels() > sourceChannels;
+        if (obsolete)
+        {
+            buffer.setSize (0, 0);
+            processedBufferSampleRates[static_cast<size_t> (i)] =
+                currentSampleRate.load (std::memory_order_acquire);
+        }
+    }
 }
 
 bool VocalEditorAudioProcessor::exportProcessedAudio (const juce::File& file, juce::String& errorMessage)
