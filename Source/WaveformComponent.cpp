@@ -232,6 +232,11 @@ void WaveformComponent::mouseUp (const juce::MouseEvent& e)
     repaint();
 }
 
+void WaveformComponent::mouseMove (const juce::MouseEvent& e)
+{
+    juce::ignoreUnused (e);
+}
+
 void WaveformComponent::mouseDoubleClick (const juce::MouseEvent& e)
 {
     juce::ignoreUnused (e);
