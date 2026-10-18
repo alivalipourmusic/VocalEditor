@@ -206,6 +206,10 @@ void VocalEditorAudioProcessor::getStateInformation (juce::MemoryBlock& destData
     state.setProperty ("dePlosiveCutoffHz", dePlosiveCutoffHz, nullptr);
     state.setProperty ("dePlosiveThresholdDb", dePlosiveThresholdDb, nullptr);
     state.setProperty ("dePlosiveMaxReductionDb", dePlosiveMaxReductionDb, nullptr);
+    state.setProperty ("noiseReductionEnabled", noiseReductionEnabled, nullptr);
+    state.setProperty ("noiseReductionThresholdDb", noiseReductionThresholdDb, nullptr);
+    state.setProperty ("noiseReductionAmountDb", noiseReductionAmountDb, nullptr);
+    state.setProperty ("noiseReductionReleaseMs", noiseReductionReleaseMs, nullptr);
 
     for (const auto* event : eventList.getAll())
     {
@@ -260,6 +264,11 @@ void VocalEditorAudioProcessor::setStateInformation (const void* data, int sizeI
     dePlosiveCutoffHz = juce::jlimit (60.0f, 300.0f, static_cast<float> (state.getProperty ("dePlosiveCutoffHz", 140.0f)));
     dePlosiveThresholdDb = juce::jlimit (-60.0f, -6.0f, static_cast<float> (state.getProperty ("dePlosiveThresholdDb", -24.0f)));
     dePlosiveMaxReductionDb = juce::jlimit (0.0f, 24.0f, static_cast<float> (state.getProperty ("dePlosiveMaxReductionDb", 9.0f)));
+
+    noiseReductionEnabled = static_cast<bool> (state.getProperty ("noiseReductionEnabled", false));
+    noiseReductionThresholdDb = juce::jlimit (-80.0f, -18.0f, static_cast<float> (state.getProperty ("noiseReductionThresholdDb", -48.0f)));
+    noiseReductionAmountDb = juce::jlimit (0.0f, 36.0f, static_cast<float> (state.getProperty ("noiseReductionAmountDb", 18.0f)));
+    noiseReductionReleaseMs = juce::jlimit (20.0f, 1000.0f, static_cast<float> (state.getProperty ("noiseReductionReleaseMs", 180.0f)));
 
     const auto audioPath = state.getProperty ("audioFile").toString();
     const juce::File audioFile (audioPath);
@@ -516,6 +525,62 @@ void VocalEditorAudioProcessor::applyDePlosiveToBuffer (juce::AudioBuffer<float>
     }
 }
 
+void VocalEditorAudioProcessor::setNoiseReductionEnabled (bool enabled)
+{
+    if (noiseReductionEnabled == enabled)
+        return;
+    noiseReductionEnabled = enabled;
+    updateProcessedBuffer();
+}
+
+void VocalEditorAudioProcessor::setNoiseReductionParameters (float thresholdDb, float reductionDb, float releaseMs)
+{
+    noiseReductionThresholdDb = juce::jlimit (-80.0f, -18.0f, thresholdDb);
+    noiseReductionAmountDb = juce::jlimit (0.0f, 36.0f, reductionDb);
+    noiseReductionReleaseMs = juce::jlimit (20.0f, 1000.0f, releaseMs);
+    updateProcessedBuffer();
+}
+
+void VocalEditorAudioProcessor::applyNoiseReductionToBuffer (juce::AudioBuffer<float>& buffer)
+{
+    if (! noiseReductionEnabled || buffer.getNumSamples() == 0 || currentSampleRate <= 0.0)
+        return;
+
+    // Adaptive downward expander for low-level passages. This is useful for
+    // pauses and room noise between phrases, not spectral denoising under speech.
+    const double sr = currentSampleRate;
+    const float threshold = juce::Decibels::decibelsToGain (noiseReductionThresholdDb);
+    const float floorGain = juce::Decibels::decibelsToGain (-noiseReductionAmountDb);
+    const float attack = static_cast<float> (1.0 - std::exp (-1.0 / (sr * 0.005)));
+    const float release = static_cast<float> (1.0 - std::exp (-1.0 / (sr * noiseReductionReleaseMs * 0.001)));
+    const float ratio = 2.5f;
+
+    for (int ch = 0; ch < buffer.getNumChannels(); ++ch)
+    {
+        float envelope = 0.0f;
+        float gain = 1.0f;
+        auto* samples = buffer.getWritePointer (ch);
+        for (int i = 0; i < buffer.getNumSamples(); ++i)
+        {
+            const float input = samples[i];
+            const float magnitude = std::abs (input);
+            envelope += (magnitude > envelope ? attack : release) * (magnitude - envelope);
+
+            float targetGain = 1.0f;
+            if (envelope < threshold && noiseReductionAmountDb > 0.0f)
+            {
+                const float level = envelope / juce::jmax (threshold, 1.0e-7f);
+                const float attenuation = juce::jlimit (0.0f, 1.0f, (1.0f - level) * ratio);
+                targetGain = 1.0f - attenuation * (1.0f - floorGain);
+            }
+
+            // Smooth gain changes to avoid abrupt gating clicks.
+            gain += (targetGain > gain ? attack : release) * (targetGain - gain);
+            samples[i] = input * gain;
+        }
+    }
+}
+
 void VocalEditorAudioProcessor::updateProcessedBuffer()
 {
     // The message thread is the only writer. Never overwrite the published
@@ -551,6 +616,7 @@ void VocalEditorAudioProcessor::updateProcessedBuffer()
     // audio rather than being overwritten by event-level sample replacement.
     applyDeEsserToBuffer (target);
     applyDePlosiveToBuffer (target);
+    applyNoiseReductionToBuffer (target);
 
     activeProcessedBuffer.store (targetIndex, std::memory_order_release);
 }
