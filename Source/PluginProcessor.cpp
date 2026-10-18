@@ -799,15 +799,22 @@ int VocalEditorAudioProcessor::autoSegmentFromSilence (const SegmentParams& para
 
     const auto before = captureEventState();
     const int totalSamples = audioBuffer.getNumSamples();
-    const int frameSamples = juce::jmax (1, static_cast<int> (std::round (currentSampleRate * 0.010)));
-    const int numFrames = (totalSamples + frameSamples - 1) / frameSamples;
-    const float threshold = juce::Decibels::decibelsToGain (params.silenceThresholdDb);
-    const int minSilenceFrames = juce::jmax (1, static_cast<int> (
-        std::ceil (params.minSilenceMs / 10.0)));
-    const int minEventFrames = juce::jmax (1, static_cast<int> (
-        std::ceil (params.minEventMs / 10.0)));
-    const int padSamples = juce::jmax (0, static_cast<int> (
-        std::round (params.padMs * 0.001 * currentSampleRate)));
+    const double rate = currentSampleRate.load (std::memory_order_acquire);
+    const float thresholdDb = std::isfinite (params.silenceThresholdDb)
+        ? juce::jlimit (-120.0f, 0.0f, params.silenceThresholdDb) : -40.0f;
+    const double minSilenceMs = std::isfinite (params.minSilenceMs)
+        ? juce::jlimit (10.0, 10000.0, params.minSilenceMs) : 120.0;
+    const double minEventMs = std::isfinite (params.minEventMs)
+        ? juce::jlimit (5.0, 10000.0, params.minEventMs) : 80.0;
+    const double padMs = std::isfinite (params.padMs)
+        ? juce::jlimit (0.0, 500.0, params.padMs) : 20.0;
+    const int frameSamples = juce::jmax (1, static_cast<int> (std::round (rate * 0.010)));
+    const int numFrames = totalSamples / frameSamples
+        + (totalSamples % frameSamples != 0 ? 1 : 0);
+    const float threshold = juce::Decibels::decibelsToGain (thresholdDb);
+    const int minSilenceFrames = juce::jmax (1, static_cast<int> (std::ceil (minSilenceMs / 10.0)));
+    const int minEventFrames = juce::jmax (1, static_cast<int> (std::ceil (minEventMs / 10.0)));
+    const int padSamples = VocalAudioMath::millisecondsToSamplesClamped (padMs, rate, totalSamples);
 
     auto frameIsActive = [&] (int frame)
     {
@@ -852,13 +859,14 @@ int VocalEditorAudioProcessor::autoSegmentFromSilence (const SegmentParams& para
         // must not overlap or their gain envelopes would multiply.
         int startSample = juce::jmax (lastCreatedEndSample,
                                       juce::jmax (0, startFrame * frameSamples - padSamples));
-        int endSample = juce::jmin (totalSamples, endFrame * frameSamples + padSamples);
-        if (endSample - startSample < minEventFrames * frameSamples)
+        int endSample = static_cast<int> (juce::jmin<juce::int64> (totalSamples,
+            static_cast<juce::int64> (endFrame) * frameSamples + padSamples));
+        if (static_cast<juce::int64> (endSample) - startSample < static_cast<juce::int64> (minEventFrames) * frameSamples)
             return;
 
         const double startTime = static_cast<double> (startSample) / currentSampleRate;
         const double endTime = static_cast<double> (endSample) / currentSampleRate;
-        if (endTime - startTime < params.minEventMs * 0.001)
+        if (endTime - startTime < minEventMs * 0.001)
             return;
 
         eventList.add (startTime, endTime, params.eventType);
