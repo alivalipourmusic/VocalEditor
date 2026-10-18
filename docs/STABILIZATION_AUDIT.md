@@ -249,6 +249,7 @@ ctest --test-dir build -C Release --output-on-failure
 ## Phase 18 progress: edit-input guards and fade-fit overflow
 
 - [x] Reject non-finite gain, fade duration, and split-time values before they can mutate an event or pollute Undo snapshots.
+- [x] Reject non-finite Level Process target values before they can affect event gains or envelope points.
 - [x] Validate split minimum segment lengths before taking an Undo snapshot, avoiding unnecessary history capture for no-op edits.
 - [x] Fix signed integer overflow in fade fitting by accumulating fade lengths in a 64-bit integer.
 - [x] Add a regression test with both fades set to INT_MAX, asserting the fitted sum exactly equals the event length and neither fade exceeds it.
