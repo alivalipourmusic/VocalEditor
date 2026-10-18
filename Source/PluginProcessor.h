@@ -122,6 +122,7 @@ public:
     bool canRedo() const { return undoManager.canRedo(); }
 
     void updateProcessedBuffer();
+    bool isProcessedBufferUpdatePending() const { return processedBufferUpdatePending.load (std::memory_order_acquire); }
 
 private:
     juce::AudioFormatManager formatManager;
@@ -136,6 +137,7 @@ private:
     // must never pair a newly loaded file's rate with an older published buffer.
     std::array<double, 3> processedBufferSampleRates { 44100.0, 44100.0, 44100.0 };
     std::atomic<int> activeProcessedBuffer { 0 };
+    std::atomic<bool> processedBufferUpdatePending { false };
     std::array<std::atomic<int>, 3> processedBufferReaders { 0, 0, 0 };
 
     juce::File currentAudioFile;
