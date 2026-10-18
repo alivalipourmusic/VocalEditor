@@ -256,3 +256,21 @@ ctest --test-dir build -C Release --output-on-failure
 - [x] Add a regression test with both fades set to INT_MAX, asserting the fitted sum exactly equals the event length and neither fade exceeds it.
 - [ ] Confirm the latest Windows CI build and CTest result after the full batch of commits.
 - [ ] Runtime audio checks remain required for fade continuity when splitting inside a fade region, Undo/Redo through repeated edits, and playback under Cubase.
+
+
+## Phase 19: Smooth word-level dynamics
+
+- [x] Add an independent dynamic gain offset to each event; it does not overwrite the existing base gain or user envelope.
+- [x] Add cubic smoothstep ramps for the dynamic gain offset at the event's leading and trailing edges, with independently adjustable durations.
+- [x] Keep transition sample conversion bounded and precompute sample counts outside the per-sample render loop.
+- [x] Expose Word Dynamics, Soft Gain In, and Soft Gain Out controls in the selected-event panel.
+- [x] Include the new fields in project/state serialization and Undo/Redo snapshots; older version-1 projects default the new values to zero.
+- [x] Preserve the existing internal gain curve when splitting an already-dynamic event by disabling the newly-created internal edge ramps.
+- [x] Reject merges where dynamic-gain shaping would be lost, rather than silently flattening the transition.
+- [x] Add signal-level regression tests for entry ramp, full-gain body, exit ramp, unchanged samples outside the event, and RMS accounting.
+- [ ] Confirm Windows compilation and CTest on the latest commit.
+- [ ] Listen-test perceived word joins on real vocal material in Standalone and Cubase; numerical tests do not replace listening.
+
+### Usage notes
+
+Set **Word Dynamics** to the extra gain you want at the centre of the selected word (for example +3 to +6 dB). Set **Soft Gain In** and **Soft Gain Out** to shape how quickly that additional boost rises and returns to the event's existing gain curve. These are gain-automation transitions, not fades to silence, so they do not mute the word edges. A zero duration disables that side's smoothing. The settings are independent of the existing Fade In/Out controls.
