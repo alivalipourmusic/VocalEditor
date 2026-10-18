@@ -304,6 +304,25 @@ void VocalEditorAudioProcessor::deleteEvent (const juce::Uuid& id)
     eventList.removeById (id);
 }
 
+void VocalEditorAudioProcessor::splitEvent (const juce::Uuid& id, double splitTime)
+{
+    auto* event = eventList.getById (id);
+    if (event == nullptr || splitTime <= event->startTime || splitTime >= event->endTime)
+        return;
+
+    const double oldEnd = event->endTime;
+    const auto oldType = event->type;
+    const float oldGain = event->gainDb;
+    const double oldFadeOut = event->fadeOutMs;
+    event->endTime = splitTime;
+    event->fadeOutMs = 0.0;
+
+    auto* second = eventList.add (splitTime, oldEnd, oldType);
+    second->gainDb = oldGain;
+    second->fadeOutMs = oldFadeOut;
+    setSelectedEvent (second);
+}
+
 //==============================================================================
 // This creates new instances of the plugin
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()
