@@ -198,6 +198,10 @@ void VocalEditorAudioProcessor::getStateInformation (juce::MemoryBlock& destData
     juce::ValueTree state ("VocalEditorState");
     state.setProperty ("version", 1, nullptr);
     state.setProperty ("audioFile", currentAudioFile.getFullPathName(), nullptr);
+    state.setProperty ("deEsserEnabled", deEsserEnabled, nullptr);
+    state.setProperty ("deEsserFrequencyHz", deEsserFrequencyHz, nullptr);
+    state.setProperty ("deEsserThresholdDb", deEsserThresholdDb, nullptr);
+    state.setProperty ("deEsserMaxReductionDb", deEsserMaxReductionDb, nullptr);
 
     for (const auto* event : eventList.getAll())
     {
@@ -242,6 +246,11 @@ void VocalEditorAudioProcessor::setStateInformation (const void* data, int sizeI
     const auto state = juce::ValueTree::fromXml (*xml);
     if (! state.isValid() || state.getType() != juce::Identifier ("VocalEditorState"))
         return;
+
+    deEsserEnabled = static_cast<bool> (state.getProperty ("deEsserEnabled", false));
+    deEsserFrequencyHz = juce::jlimit (2500.0f, 12000.0f, static_cast<float> (state.getProperty ("deEsserFrequencyHz", 6500.0f)));
+    deEsserThresholdDb = juce::jlimit (-60.0f, -6.0f, static_cast<float> (state.getProperty ("deEsserThresholdDb", -28.0f)));
+    deEsserMaxReductionDb = juce::jlimit (0.0f, 18.0f, static_cast<float> (state.getProperty ("deEsserMaxReductionDb", 6.0f)));
 
     const auto audioPath = state.getProperty ("audioFile").toString();
     const juce::File audioFile (audioPath);
@@ -387,6 +396,61 @@ void VocalEditorAudioProcessor::applyEventToBuffer (const VocalEvent& event, juc
     }
 }
 
+void VocalEditorAudioProcessor::setDeEsserEnabled (bool enabled)
+{
+    if (deEsserEnabled == enabled)
+        return;
+    deEsserEnabled = enabled;
+    updateProcessedBuffer();
+}
+
+void VocalEditorAudioProcessor::setDeEsserParameters (float frequencyHz, float thresholdDb, float maxReductionDb)
+{
+    deEsserFrequencyHz = juce::jlimit (2500.0f, 12000.0f, frequencyHz);
+    deEsserThresholdDb = juce::jlimit (-60.0f, -6.0f, thresholdDb);
+    deEsserMaxReductionDb = juce::jlimit (0.0f, 18.0f, maxReductionDb);
+    updateProcessedBuffer();
+}
+
+void VocalEditorAudioProcessor::applyDeEsserToBuffer (juce::AudioBuffer<float>& buffer)
+{
+    if (! deEsserEnabled || buffer.getNumSamples() == 0 || currentSampleRate <= 0.0)
+        return;
+
+    // Split-band detector. This is deterministic DSP, not a trained AI model.
+    const double sr = currentSampleRate;
+    const double splitHz = juce::jlimit (1500.0, sr * 0.45, static_cast<double> (deEsserFrequencyHz) * 0.72);
+    const float lowAlpha = static_cast<float> (1.0 - std::exp (-2.0 * juce::MathConstants<double>::pi * splitHz / sr));
+    const float attack = static_cast<float> (1.0 - std::exp (-1.0 / (sr * 0.0015)));
+    const float release = static_cast<float> (1.0 - std::exp (-1.0 / (sr * 0.045)));
+    const float threshold = juce::Decibels::decibelsToGain (deEsserThresholdDb);
+    const float maxReduction = juce::Decibels::decibelsToGain (-deEsserMaxReductionDb);
+
+    for (int ch = 0; ch < buffer.getNumChannels(); ++ch)
+    {
+        float low = 0.0f;
+        float detector = 0.0f;
+        auto* samples = buffer.getWritePointer (ch);
+        for (int i = 0; i < buffer.getNumSamples(); ++i)
+        {
+            const float input = samples[i];
+            low += lowAlpha * (input - low);
+            const float high = input - low;
+            const float magnitude = std::abs (high);
+            const float coeff = magnitude > detector ? attack : release;
+            detector += coeff * (magnitude - detector);
+
+            float bandGain = 1.0f;
+            if (detector > threshold && deEsserMaxReductionDb > 0.0f)
+            {
+                const float over = juce::jlimit (0.0f, 1.0f, (detector - threshold) / juce::jmax (threshold, 1.0e-5f));
+                bandGain = 1.0f + (maxReduction - 1.0f) * over;
+            }
+            samples[i] = low + high * bandGain;
+        }
+    }
+}
+
 void VocalEditorAudioProcessor::updateProcessedBuffer()
 {
     // The message thread is the only writer. Never overwrite the published
@@ -408,7 +472,8 @@ void VocalEditorAudioProcessor::updateProcessedBuffer()
     if (audioBuffer.getNumSamples() <= 0 || audioBuffer.getNumChannels() <= 0)
     {
         target.setSize (0, 0);
-        activeProcessedBuffer.store (targetIndex, std::memory_order_release);
+        applyDeEsserToBuffer (target);
+    activeProcessedBuffer.store (targetIndex, std::memory_order_release);
         return;
     }
 
