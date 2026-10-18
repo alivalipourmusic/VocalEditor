@@ -115,6 +115,16 @@ The project currently has no dedicated test target visible in the inspected CMak
 - [ ] Compile and execute tests on Windows; not build-verified in this environment.
 - [ ] Future architecture work: stream or process long files in chunks instead of requiring full source and processed copies in RAM.
 
+## Phase 12 progress: aggregate memory budget and render failure handling
+
+- [x] Add an overflow-safe working-set estimator for one source buffer plus three render snapshots.
+- [x] Enforce a conservative 4 GiB aggregate buffer budget during source import, project loading, and processed-buffer publication.
+- [x] Catch allocation failure while constructing a processed snapshot and never publish a partial render.
+- [x] Distinguish temporary reader contention from allocation/budget failures so the 15 ms UI timer does not repeatedly attempt a failing large allocation.
+- [x] Add unit tests for aggregate working-set limits, zero copy count and invalid sample counts.
+- [ ] Compile and execute the full test suite on Windows; this change is not build-verified.
+- [ ] Longer-term: replace full-file duplicated render snapshots with a chunked or streaming architecture for long recordings.
+
 ## Status clarification
 
 Earlier sections describe findings from the initial audit snapshot. Since then, state serialization, safer staged import, event snapshot undo actions, processed audio export, and the sample-rate separation above have been added on this branch. The outstanding items in the validation checklist remain unverified until a real build and tests run.
