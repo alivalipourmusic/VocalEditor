@@ -95,6 +95,47 @@ namespace
                "invalid channels return silence");
     }
 
+    void testSignalLevelGainAndFadeRendering()
+    {
+        constexpr double sampleRate = 48000.0;
+        constexpr int numSamples = 4800;
+        juce::AudioBuffer<float> audio (1, numSamples);
+        audio.clear();
+        for (int i = 0; i < numSamples; ++i)
+            audio.setSample (0, i, 0.5f);
+
+        VocalEvent event;
+        event.startTime = 0.025;
+        event.endTime = 0.075;
+        event.gainDb = -6.0f;
+
+        VocalAudioMath::applyEventToBuffer (event, audio, sampleRate);
+
+        const int start = 1200;
+        const int end = 3600;
+        const float expectedGain = juce::Decibels::decibelsToGain (-6.0f);
+        check (near (audio.getSample (0, start), 0.5f * expectedGain),
+               "event start receives the expected constant gain when fades are disabled");
+        check (near (audio.getSample (0, start - 1), 0.5f),
+               "samples before the event remain untouched");
+        check (near (audio.getSample (0, end), 0.5f),
+               "samples after the event remain untouched");
+
+        juce::AudioBuffer<float> faded (1, numSamples);
+        for (int i = 0; i < numSamples; ++i)
+            faded.setSample (0, i, 0.5f);
+        event.fadeInMs = 10.0;
+        event.fadeOutMs = 10.0;
+        VocalAudioMath::applyEventToBuffer (event, faded, sampleRate);
+
+        check (near (faded.getSample (0, start), 0.0f),
+               "rendered fade-in starts at silence");
+        check (near (faded.getSample (0, start + 479), 0.5f * expectedGain),
+               "rendered fade-in reaches target gain at its last sample");
+        check (near (faded.getSample (0, end - 1), 0.0f),
+               "rendered fade-out ends at silence");
+    }
+
     void testIntervalOverlapRules()
     {
         check (VocalAudioMath::intervalsOverlap (0.0, 1.0, 0.5, 1.5),
@@ -171,6 +212,7 @@ int main()
     testLinearInterpolation();
     testFadeEndpointsAndShortEvents();
     testIntervalOverlapRules();
+    testSignalLevelGainAndFadeRendering();
 
     if (failures == 0)
     {
