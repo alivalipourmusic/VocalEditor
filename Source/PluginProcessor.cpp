@@ -1266,6 +1266,24 @@ void VocalEditorAudioProcessor::setEventFades (const juce::Uuid& id, double fade
     }
 }
 
+void VocalEditorAudioProcessor::setEventDynamics (const juce::Uuid& id, float dynamicGainDb,
+                                                        double transitionInMs, double transitionOutMs)
+{
+    auto* event = eventList.getById (id);
+    if (event == nullptr || event->locked || ! std::isfinite (dynamicGainDb)
+        || ! std::isfinite (transitionInMs) || ! std::isfinite (transitionOutMs))
+        return;
+
+    const auto before = captureEventState();
+    event->dynamicGainDb = juce::jlimit (-24.0f, 24.0f, dynamicGainDb);
+    const double maxTransitionMs = event->getLength() * 500.0;
+    event->gainTransitionInMs = juce::jlimit (0.0, maxTransitionMs, transitionInMs);
+    event->gainTransitionOutMs = juce::jlimit (0.0, maxTransitionMs, transitionOutMs);
+
+    updateProcessedBuffer();
+    recordEventUndo (before, "Change Word Dynamics", 300);
+}
+
 void VocalEditorAudioProcessor::setSelectedEvent (VocalEvent* event)
 {
     selectedEvent = event;
@@ -1292,6 +1310,9 @@ void VocalEditorAudioProcessor::splitEvent (const juce::Uuid& id, double splitTi
     const auto originalFadeInCurve = event->fadeInCurve;
     const auto originalFadeOutCurve = event->fadeOutCurve;
     const float originalGain = event->gainDb;
+    const float originalDynamicGain = event->dynamicGainDb;
+    const double originalTransitionIn = event->gainTransitionInMs;
+    const double originalTransitionOut = event->gainTransitionOutMs;
     const float splitNormalised = static_cast<float> (
         (split - originalStart) / (originalEnd - originalStart));
     const bool hadCustomEnvelope = ! event->envelope.isEmpty();
@@ -1309,11 +1330,16 @@ void VocalEditorAudioProcessor::splitEvent (const juce::Uuid& id, double splitTi
     // right segment, while the original envelope is split at the exact boundary.
     event->endTime = split;
     event->fadeOutMs = 0.0;
+    event->gainTransitionOutMs = 0.0; // An internal split must not introduce a new gain dip.
     if (hadCustomEnvelope)
         event->envelope = leftEnvelope;
 
     auto* right = eventList.add (split, originalEnd, originalType);
     right->gainDb = originalGain;
+    right->dynamicGainDb = originalDynamicGain;
+    right->gainTransitionInMs = 0.0; // Preserve continuity at the new internal boundary.
+    right->gainTransitionOutMs = juce::jmin (originalTransitionOut, right->getLength() * 500.0);
+    event->gainTransitionInMs = juce::jmin (originalTransitionIn, event->getLength() * 500.0);
     right->fadeInMs = 0.0;
     right->fadeOutMs = juce::jmin (originalFadeOut, right->getLength() * 500.0);
     right->fadeInCurve = originalFadeInCurve;
@@ -1383,7 +1409,10 @@ void VocalEditorAudioProcessor::mergeEvents (const juce::Uuid& idA, const juce::
     // A merged event has only one fade-in and one fade-out. Until internal
     // fades can be represented explicitly, reject merges that would erase them.
     if (gap < -1.0e-6 || gap > 1.0e-6
-        || a->fadeOutMs > 1.0e-6 || b->fadeInMs > 1.0e-6)
+        || a->fadeOutMs > 1.0e-6 || b->fadeInMs > 1.0e-6
+        || std::abs (a->dynamicGainDb) > 1.0e-6f || std::abs (b->dynamicGainDb) > 1.0e-6f
+        || a->gainTransitionInMs > 1.0e-6 || a->gainTransitionOutMs > 1.0e-6
+        || b->gainTransitionInMs > 1.0e-6 || b->gainTransitionOutMs > 1.0e-6)
         return;
 
     // A single merged envelope cannot represent a discontinuity at the join.
