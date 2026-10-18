@@ -293,6 +293,30 @@ namespace
                "working-set preflight rejects invalid sample counts");
     }
 
+    void testSupportedRateAndFadeSampleBounds()
+    {
+        check (VocalAudioMath::isSupportedSampleRate (44100.0),
+               "common audio sample rates are accepted");
+        check (VocalAudioMath::isSupportedSampleRate (192000.0),
+               "high-resolution audio sample rates are accepted");
+        check (! VocalAudioMath::isSupportedSampleRate (0.0),
+               "zero sample rate is rejected");
+        check (! VocalAudioMath::isSupportedSampleRate (1.0e100),
+               "absurd sample rate metadata is rejected");
+        check (! VocalAudioMath::isSupportedSampleRate (std::numeric_limits<double>::quiet_NaN()),
+               "non-finite sample rate metadata is rejected");
+
+        check (VocalAudioMath::millisecondsToSamplesClamped (10.0, 48000.0, 1000) == 480,
+               "fade milliseconds convert to the expected sample count");
+        check (VocalAudioMath::millisecondsToSamplesClamped (1.0e300, 48000.0, 1000) == 1000,
+               "huge fade duration clamps before integer conversion");
+        check (VocalAudioMath::millisecondsToSamplesClamped (
+                   std::numeric_limits<double>::quiet_NaN(), 48000.0, 1000) == 0,
+               "non-finite fade duration safely becomes zero");
+        check (VocalAudioMath::millisecondsToSamplesClamped (10.0, 48000.0, 0) == 0,
+               "empty event cannot produce fade samples");
+    }
+
     void testTimeToSampleIndexBounds()
     {
         check (VocalAudioMath::timeToSampleIndex (0.5, 48000.0, 48000) == 24000,
@@ -420,6 +444,7 @@ int main()
     testIntervalOverlapRules();
     testTimelineValidation();
     testTimeToSampleIndexBounds();
+    testSupportedRateAndFadeSampleBounds();
     testAudioAllocationPreflight();
     testAudioWorkingSetBudget();
     testMergeEnvelopeBoundaryCompatibility();
