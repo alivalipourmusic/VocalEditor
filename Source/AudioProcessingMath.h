@@ -18,6 +18,16 @@ namespace VocalAudioMath
         return startA < endB - tolerance && startB < endA - tolerance;
     }
 
+    inline bool canJoinEnvelopeAtBoundary (const VocalEvent& left,
+                                            const VocalEvent& right,
+                                            float tolerance = 1.0e-4f) noexcept
+    {
+        const float leftGain = left.getEnvelopeGainDb (1.0f);
+        const float rightGain = right.getEnvelopeGainDb (0.0f);
+        return std::isfinite (leftGain) && std::isfinite (rightGain)
+            && std::abs (leftGain - rightGain) <= tolerance;
+    }
+
     inline double fadeCurveValue (double progress, VocalEvent::FadeCurve curve) noexcept
     {
         const double x = juce::jlimit (0.0, 1.0, progress);
