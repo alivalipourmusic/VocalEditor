@@ -122,6 +122,8 @@ public:
     bool canRedo() const { return undoManager.canRedo(); }
 
     void updateProcessedBuffer();
+    // Message-thread maintenance: release obsolete snapshots only when the audio callback is not reading them.
+    void reclaimUnusedProcessedBufferMemory();
     bool isProcessedBufferUpdatePending() const { return processedBufferUpdatePending.load (std::memory_order_acquire); }
     bool shouldRetryProcessedBufferUpdate() const { return isProcessedBufferUpdatePending() && ! processedBufferUpdateRetryBlocked.load (std::memory_order_acquire); }
 
