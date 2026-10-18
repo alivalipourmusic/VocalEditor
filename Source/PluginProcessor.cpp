@@ -202,6 +202,10 @@ void VocalEditorAudioProcessor::getStateInformation (juce::MemoryBlock& destData
     state.setProperty ("deEsserFrequencyHz", deEsserFrequencyHz, nullptr);
     state.setProperty ("deEsserThresholdDb", deEsserThresholdDb, nullptr);
     state.setProperty ("deEsserMaxReductionDb", deEsserMaxReductionDb, nullptr);
+    state.setProperty ("dePlosiveEnabled", dePlosiveEnabled, nullptr);
+    state.setProperty ("dePlosiveCutoffHz", dePlosiveCutoffHz, nullptr);
+    state.setProperty ("dePlosiveThresholdDb", dePlosiveThresholdDb, nullptr);
+    state.setProperty ("dePlosiveMaxReductionDb", dePlosiveMaxReductionDb, nullptr);
 
     for (const auto* event : eventList.getAll())
     {
@@ -251,6 +255,11 @@ void VocalEditorAudioProcessor::setStateInformation (const void* data, int sizeI
     deEsserFrequencyHz = juce::jlimit (2500.0f, 12000.0f, static_cast<float> (state.getProperty ("deEsserFrequencyHz", 6500.0f)));
     deEsserThresholdDb = juce::jlimit (-60.0f, -6.0f, static_cast<float> (state.getProperty ("deEsserThresholdDb", -28.0f)));
     deEsserMaxReductionDb = juce::jlimit (0.0f, 18.0f, static_cast<float> (state.getProperty ("deEsserMaxReductionDb", 6.0f)));
+
+    dePlosiveEnabled = static_cast<bool> (state.getProperty ("dePlosiveEnabled", false));
+    dePlosiveCutoffHz = juce::jlimit (60.0f, 300.0f, static_cast<float> (state.getProperty ("dePlosiveCutoffHz", 140.0f)));
+    dePlosiveThresholdDb = juce::jlimit (-60.0f, -6.0f, static_cast<float> (state.getProperty ("dePlosiveThresholdDb", -24.0f)));
+    dePlosiveMaxReductionDb = juce::jlimit (0.0f, 24.0f, static_cast<float> (state.getProperty ("dePlosiveMaxReductionDb", 9.0f)));
 
     const auto audioPath = state.getProperty ("audioFile").toString();
     const juce::File audioFile (audioPath);
@@ -451,6 +460,62 @@ void VocalEditorAudioProcessor::applyDeEsserToBuffer (juce::AudioBuffer<float>& 
     }
 }
 
+void VocalEditorAudioProcessor::setDePlosiveEnabled (bool enabled)
+{
+    if (dePlosiveEnabled == enabled)
+        return;
+    dePlosiveEnabled = enabled;
+    updateProcessedBuffer();
+}
+
+void VocalEditorAudioProcessor::setDePlosiveParameters (float cutoffHz, float thresholdDb, float maxReductionDb)
+{
+    dePlosiveCutoffHz = juce::jlimit (60.0f, 300.0f, cutoffHz);
+    dePlosiveThresholdDb = juce::jlimit (-60.0f, -6.0f, thresholdDb);
+    dePlosiveMaxReductionDb = juce::jlimit (0.0f, 24.0f, maxReductionDb);
+    updateProcessedBuffer();
+}
+
+void VocalEditorAudioProcessor::applyDePlosiveToBuffer (juce::AudioBuffer<float>& buffer)
+{
+    if (! dePlosiveEnabled || buffer.getNumSamples() == 0 || currentSampleRate <= 0.0)
+        return;
+
+    // High-pass/low-band attenuation aimed at close-mic plosive bursts.
+    // The detector is smoothed and attenuation is capped; this is conventional
+    // DSP, not speech recognition or a trained AI model.
+    const double sr = currentSampleRate;
+    const float alpha = static_cast<float> (1.0 - std::exp (-2.0 * juce::MathConstants<double>::pi
+                                                            * dePlosiveCutoffHz / sr));
+    const float attack = static_cast<float> (1.0 - std::exp (-1.0 / (sr * 0.002)));
+    const float release = static_cast<float> (1.0 - std::exp (-1.0 / (sr * 0.070)));
+    const float threshold = juce::Decibels::decibelsToGain (dePlosiveThresholdDb);
+    const float minGain = juce::Decibels::decibelsToGain (-dePlosiveMaxReductionDb);
+
+    for (int ch = 0; ch < buffer.getNumChannels(); ++ch)
+    {
+        float low = 0.0f;
+        float detector = 0.0f;
+        auto* samples = buffer.getWritePointer (ch);
+        for (int i = 0; i < buffer.getNumSamples(); ++i)
+        {
+            const float input = samples[i];
+            low += alpha * (input - low);
+            const float magnitude = std::abs (low);
+            detector += (magnitude > detector ? attack : release) * (magnitude - detector);
+
+            float lowGain = 1.0f;
+            if (detector > threshold && dePlosiveMaxReductionDb > 0.0f)
+            {
+                const float over = juce::jlimit (0.0f, 1.0f,
+                    (detector - threshold) / juce::jmax (threshold, 1.0e-5f));
+                lowGain = 1.0f + (minGain - 1.0f) * over;
+            }
+            samples[i] = input - low * (1.0f - lowGain);
+        }
+    }
+}
+
 void VocalEditorAudioProcessor::updateProcessedBuffer()
 {
     // The message thread is the only writer. Never overwrite the published
@@ -473,6 +538,7 @@ void VocalEditorAudioProcessor::updateProcessedBuffer()
     {
         target.setSize (0, 0);
         applyDeEsserToBuffer (target);
+        applyDePlosiveToBuffer (target);
     activeProcessedBuffer.store (targetIndex, std::memory_order_release);
         return;
     }
