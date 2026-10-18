@@ -112,7 +112,6 @@ void WaveformComponent::drawFadeHandles (juce::Graphics& g, const VocalEvent& ev
         fade.startNewSubPath (xStart, yBottom);
         fade.lineTo (xFadeIn, yTop);
         g.strokePath (fade, juce::PathStrokeType (isSelected ? 2.0f : 1.0f));
-        g.fillEllipse (xFadeIn - 3.0f, yTop - 1.0f, 6.0f, 6.0f);
     }
     if (event.fadeOutMs > 0.0)
     {
@@ -120,7 +119,21 @@ void WaveformComponent::drawFadeHandles (juce::Graphics& g, const VocalEvent& ev
         fade.startNewSubPath (xFadeOut, yTop);
         fade.lineTo (xEnd, yBottom);
         g.strokePath (fade, juce::PathStrokeType (isSelected ? 2.0f : 1.0f));
-        g.fillEllipse (xFadeOut - 3.0f, yTop - 1.0f, 6.0f, 6.0f);
+    }
+
+    // Always show the handles on the selected event so zero-length fades can
+    // be created directly on the waveform as well as adjusted.
+    if (isSelected)
+    {
+        g.fillEllipse (xFadeIn - 4.0f, yTop - 1.0f, 8.0f, 8.0f);
+        g.fillEllipse (xFadeOut - 4.0f, yTop - 1.0f, 8.0f, 8.0f);
+    }
+    else
+    {
+        if (event.fadeInMs > 0.0)
+            g.fillEllipse (xFadeIn - 3.0f, yTop - 1.0f, 6.0f, 6.0f);
+        if (event.fadeOutMs > 0.0)
+            g.fillEllipse (xFadeOut - 3.0f, yTop - 1.0f, 6.0f, 6.0f);
     }
 }
 
