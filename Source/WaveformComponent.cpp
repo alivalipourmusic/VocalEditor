@@ -42,6 +42,7 @@ void WaveformComponent::paint (juce::Graphics& g)
     
     drawGrid (g);
     drawWaveform (g);
+    drawEvents (g);
     drawSelection (g);
     drawPlayhead (g);
 }
@@ -66,6 +67,38 @@ void WaveformComponent::drawWaveform (juce::Graphics& g)
                              visibleStartTime,
                              visibleEndTime,
                              1.0f);
+}
+
+void WaveformComponent::drawEvents (juce::Graphics& g)
+{
+    const auto& events = processor.getEventList().getAll();
+    const float top = 12.0f;
+    const float height = juce::jmax (24.0f, static_cast<float> (getHeight()) - 24.0f);
+
+    for (auto* event : events)
+    {
+        if (event == nullptr || event->endTime < visibleStartTime || event->startTime > visibleEndTime)
+            continue;
+
+        const float x1 = static_cast<float> (timeToX (event->startTime));
+        const float x2 = static_cast<float> (timeToX (event->endTime));
+        const auto rect = juce::Rectangle<float> (x1, top, juce::jmax (2.0f, x2 - x1), height);
+        const bool selected = (processor.getSelectedEvent() == event);
+
+        g.setColour (selected ? juce::Colour (0x7734d399) : juce::Colour (0x4434d399));
+        g.fillRoundedRectangle (rect, 4.0f);
+        g.setColour (selected ? juce::Colour (0xff2dd4bf) : juce::Colour (0xff64748b));
+        g.drawRoundedRectangle (rect, 4.0f, selected ? 2.0f : 1.0f);
+
+        if (rect.getWidth() > 42.0f)
+        {
+            g.setColour (juce::Colour (0xffe2e8f0));
+            g.setFont (11.0f);
+            g.drawText (event->getTypeName() + "  " + juce::String (event->gainDb, 1) + " dB",
+                        rect.reduced (5.0f, 2.0f).toNearestInt(),
+                        juce::Justification::centredLeft, true);
+        }
+    }
 }
 
 void WaveformComponent::drawSelection (juce::Graphics& g)
@@ -159,7 +192,20 @@ void WaveformComponent::mouseDown (const juce::MouseEvent& e)
         return;
     
     const double time = xToTime (static_cast<float> (e.x));
-    
+
+    if (! e.mods.isShiftDown())
+    {
+        if (auto* event = processor.getEventList().getAtTime (time))
+        {
+            processor.setSelectedEvent (event);
+            processor.setPlaybackPosition (time);
+            isSelecting = false;
+            repaint();
+            return;
+        }
+        processor.setSelectedEvent (nullptr);
+    }
+
     if (e.mods.isShiftDown())
     {
         // Extend selection

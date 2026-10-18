@@ -225,6 +225,9 @@ void VocalEditorAudioProcessor::clearAudio()
     playbackSamplePosition = 0;
     currentlyPlaying = false;
     clearSelection();
+    eventList.clear();
+    selectedEvent = nullptr;
+    selectedEventIds.clear();
 }
 
 void VocalEditorAudioProcessor::setPlaybackPosition (double positionInSeconds)
@@ -261,6 +264,66 @@ void VocalEditorAudioProcessor::clearSelection()
     selection.isActive = false;
     selection.startTime = 0.0;
     selection.endTime = 0.0;
+}
+
+VocalEvent* VocalEditorAudioProcessor::createEventFromSelection (VocalEvent::Type type)
+{
+    if (! selection.isActive || selection.getLength() < 0.005 || ! hasAudio())
+        return nullptr;
+    auto* event = eventList.add (selection.startTime, selection.endTime, type);
+    setSelectedEvent (event);
+    return event;
+}
+
+void VocalEditorAudioProcessor::setSelectedEvent (VocalEvent* event)
+{
+    selectedEvent = event;
+    selectedEventIds.clear();
+    if (event != nullptr)
+        selectedEventIds.addIfNotAlreadyThere (event->id);
+}
+
+void VocalEditorAudioProcessor::setEventGain (const juce::Uuid& id, float gainDb)
+{
+    if (auto* event = eventList.getById (id))
+        event->gainDb = juce::jlimit (-60.0f, 24.0f, gainDb);
+}
+
+void VocalEditorAudioProcessor::setEventFades (const juce::Uuid& id, double fadeInMs, double fadeOutMs)
+{
+    if (auto* event = eventList.getById (id))
+    {
+        const double maxFadeMs = event->getLength() * 500.0;
+        event->fadeInMs = juce::jlimit (0.0, maxFadeMs, fadeInMs);
+        event->fadeOutMs = juce::jlimit (0.0, maxFadeMs, fadeOutMs);
+    }
+}
+
+void VocalEditorAudioProcessor::deleteEvent (const juce::Uuid& id)
+{
+    if (selectedEvent != nullptr && selectedEvent->id == id)
+        selectedEvent = nullptr;
+    selectedEventIds.removeAllInstancesOf (id);
+    eventList.removeById (id);
+}
+
+void VocalEditorAudioProcessor::splitEvent (const juce::Uuid& id, double splitTime)
+{
+    auto* event = eventList.getById (id);
+    if (event == nullptr || splitTime <= event->startTime || splitTime >= event->endTime)
+        return;
+
+    const double oldEnd = event->endTime;
+    const auto oldType = event->type;
+    const float oldGain = event->gainDb;
+    const double oldFadeOut = event->fadeOutMs;
+    event->endTime = splitTime;
+    event->fadeOutMs = 0.0;
+
+    auto* second = eventList.add (splitTime, oldEnd, oldType);
+    second->gainDb = oldGain;
+    second->fadeOutMs = oldFadeOut;
+    setSelectedEvent (second);
 }
 
 //==============================================================================
