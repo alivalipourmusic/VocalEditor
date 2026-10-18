@@ -756,6 +756,179 @@ int VocalEditorAudioProcessor::levelEventsToTarget (float targetDb, bool selecte
     return processed;
 }
 
+juce::XmlElement VocalEditorAudioProcessor::captureEventState() const
+{
+    juce::XmlElement state ("EventEditState");
+
+    auto* events = state.createNewChildElement ("Events");
+    for (const auto* event : eventList.getAll())
+    {
+        if (event == nullptr)
+            continue;
+
+        auto* item = events->createNewChildElement ("Event");
+        item->setAttribute ("id", event->id.toString());
+        item->setAttribute ("type", static_cast<int> (event->type));
+        item->setAttribute ("start", event->startTime);
+        item->setAttribute ("end", event->endTime);
+        item->setAttribute ("gainDb", event->gainDb);
+        item->setAttribute ("fadeInMs", event->fadeInMs);
+        item->setAttribute ("fadeOutMs", event->fadeOutMs);
+        item->setAttribute ("fadeInCurve", static_cast<int> (event->fadeInCurve));
+        item->setAttribute ("fadeOutCurve", static_cast<int> (event->fadeOutCurve));
+        item->setAttribute ("locked", event->locked);
+
+        auto* envelope = item->createNewChildElement ("Envelope");
+        for (const auto& point : event->envelope)
+        {
+            auto* pointXml = envelope->createNewChildElement ("Point");
+            pointXml->setAttribute ("t", point.t);
+            pointXml->setAttribute ("gainDb", point.gainDb);
+        }
+    }
+
+    auto* selection = state.createNewChildElement ("SelectedEvents");
+    for (const auto& id : selectedEventIds)
+    {
+        auto* item = selection->createNewChildElement ("Id");
+        item->setAttribute ("value", id.toString());
+    }
+    return state;
+}
+
+bool VocalEditorAudioProcessor::restoreEventState (const juce::XmlElement& state)
+{
+    if (! state.hasTagName ("EventEditState"))
+        return false;
+
+    struct EventData
+    {
+        juce::Uuid id;
+        VocalEvent::Type type = VocalEvent::Type::Custom;
+        double start = 0.0, end = 0.0, fadeIn = 0.0, fadeOut = 0.0;
+        float gain = 0.0f;
+        VocalEvent::FadeCurve fadeInCurve = VocalEvent::FadeCurve::Smooth;
+        VocalEvent::FadeCurve fadeOutCurve = VocalEvent::FadeCurve::Smooth;
+        bool locked = false;
+        juce::Array<VocalEvent::EnvelopePoint> envelope;
+    };
+
+    std::vector<EventData> staged;
+    if (auto* events = state.getChildByName ("Events"))
+    {
+        forEachXmlChildElementWithTagName (*events, item, "Event")
+        {
+            EventData data;
+            data.id = juce::Uuid (item->getStringAttribute ("id"));
+            const int type = item->getIntAttribute ("type", -1);
+            const int inCurve = item->getIntAttribute ("fadeInCurve", 1);
+            const int outCurve = item->getIntAttribute ("fadeOutCurve", 1);
+            data.start = item->getDoubleAttribute ("start", -1.0);
+            data.end = item->getDoubleAttribute ("end", -1.0);
+            data.gain = static_cast<float> (item->getDoubleAttribute ("gainDb", 0.0));
+            data.fadeIn = item->getDoubleAttribute ("fadeInMs", 0.0);
+            data.fadeOut = item->getDoubleAttribute ("fadeOutMs", 0.0);
+            data.locked = item->getBoolAttribute ("locked", false);
+
+            if (data.id.isNull() || type < 0 || type > 4
+                || inCurve < 0 || inCurve > 1 || outCurve < 0 || outCurve > 1
+                || ! std::isfinite (data.start) || ! std::isfinite (data.end)
+                || ! std::isfinite (data.gain) || ! std::isfinite (data.fadeIn)
+                || ! std::isfinite (data.fadeOut) || data.start < 0.0
+                || data.end <= data.start || data.gain < -96.0f || data.gain > 24.0f
+                || data.fadeIn < 0.0 || data.fadeOut < 0.0)
+                return false;
+
+            for (const auto& existing : staged)
+                if (existing.id == data.id)
+                    return false;
+
+            data.type = static_cast<VocalEvent::Type> (type);
+            data.fadeInCurve = static_cast<VocalEvent::FadeCurve> (inCurve);
+            data.fadeOutCurve = static_cast<VocalEvent::FadeCurve> (outCurve);
+
+            if (auto* envelope = item->getChildByName ("Envelope"))
+            {
+                forEachXmlChildElementWithTagName (*envelope, point, "Point")
+                {
+                    const float t = static_cast<float> (point->getDoubleAttribute ("t", -1.0));
+                    const float gain = static_cast<float> (point->getDoubleAttribute ("gainDb", 0.0));
+                    if (! std::isfinite (t) || ! std::isfinite (gain)
+                        || t < 0.0f || t > 1.0f || gain < -120.0f || gain > 24.0f
+                        || (! data.envelope.isEmpty() && t <= data.envelope.getLast().t))
+                        return false;
+                    data.envelope.add ({ t, gain });
+                }
+            }
+            staged.push_back (std::move (data));
+        }
+    }
+
+    eventList.clear();
+    selectedEvent = nullptr;
+    selectedEventIds.clear();
+    for (const auto& data : staged)
+    {
+        auto* event = eventList.add (data.start, data.end, data.type);
+        event->id = data.id;
+        event->gainDb = data.gain;
+        event->fadeInMs = juce::jmin (data.fadeIn, event->getLength() * 500.0);
+        event->fadeOutMs = juce::jmin (data.fadeOut, event->getLength() * 500.0);
+        event->fadeInCurve = data.fadeInCurve;
+        event->fadeOutCurve = data.fadeOutCurve;
+        event->locked = data.locked;
+        event->envelope = data.envelope;
+    }
+
+    if (auto* selected = state.getChildByName ("SelectedEvents"))
+    {
+        forEachXmlChildElementWithTagName (*selected, item, "Id")
+        {
+            const juce::Uuid id (item->getStringAttribute ("value"));
+            if (eventList.getById (id) != nullptr)
+                selectedEventIds.addIfNotAlreadyThere (id);
+        }
+    }
+    if (! selectedEventIds.isEmpty())
+        selectedEvent = eventList.getById (selectedEventIds.getFirst());
+
+    updateProcessedBuffer();
+    return true;
+}
+
+class VocalEditorAudioProcessor::EventStateAction final : public juce::UndoableAction
+{
+public:
+    EventStateAction (VocalEditorAudioProcessor& owner,
+                      const juce::XmlElement& oldState,
+                      const juce::XmlElement& newState,
+                      juce::String name)
+        : processor (owner), before (oldState), after (newState), actionName (std::move (name))
+    {
+    }
+
+    bool perform() override { return processor.restoreEventState (after); }
+    bool undo() override { return processor.restoreEventState (before); }
+    int getSizeInUnits() override { return before.toString().length() + after.toString().length(); }
+
+private:
+    VocalEditorAudioProcessor& processor;
+    juce::XmlElement before;
+    juce::XmlElement after;
+    juce::String actionName;
+};
+
+void VocalEditorAudioProcessor::recordEventUndo (const juce::XmlElement& before,
+                                                  const juce::String& actionName,
+                                                  int coalesceMs)
+{
+    auto after = captureEventState();
+    if (before.toString() == after.toString())
+        return;
+
+    undoManager.perform (new EventStateAction (*this, before, after, actionName), coalesceMs);
+}
+
 VocalEvent* VocalEditorAudioProcessor::createEventFromSelection (VocalEvent::Type type)
 {
     if (! hasAudio() || ! selection.isActive || selection.getLength() < 0.005)
