@@ -894,7 +894,9 @@ bool VocalEditorAudioProcessor::restoreEventState (const juce::XmlElement& state
                 || ! std::isfinite (data.gain) || ! std::isfinite (data.fadeIn)
                 || ! std::isfinite (data.fadeOut) || data.start < 0.0
                 || data.end <= data.start || data.gain < -96.0f || data.gain > 24.0f
-                || data.fadeIn < 0.0 || data.fadeOut < 0.0)
+                || data.fadeIn < 0.0 || data.fadeOut < 0.0
+                || data.fadeIn > (data.end - data.start) * 500.0 + 1.0e-6
+                || data.fadeOut > (data.end - data.start) * 500.0 + 1.0e-6)
                 return false;
 
             for (const auto& existing : staged)
@@ -920,6 +922,21 @@ bool VocalEditorAudioProcessor::restoreEventState (const juce::XmlElement& state
             }
             staged.push_back (std::move (data));
         }
+    }
+
+    // Validate the complete snapshot before mutating the live event list.
+    // Overlaps multiply event gain in the current renderer, so malformed
+    // snapshots must fail atomically rather than partially restore.
+    const double audioDuration = getDuration();
+    for (size_t i = 0; i < staged.size(); ++i)
+    {
+        if (staged[i].end > audioDuration + 1.0e-6)
+            return false;
+
+        for (size_t j = i + 1; j < staged.size(); ++j)
+            if (VocalAudioMath::intervalsOverlap (staged[i].start, staged[i].end,
+                                                   staged[j].start, staged[j].end))
+                return false;
     }
 
     eventList.clear();
