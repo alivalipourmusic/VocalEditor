@@ -1,10 +1,12 @@
 #include "MainComponent.h"
+#include "SelectedEventPanel.h"
 
 //==============================================================================
 MainComponent::MainComponent (VocalEditorAudioProcessor& p)
     : processor (p),
       timeline (p),
-      waveform (p)
+      waveform (p),
+      selectedEventPanel (p)
 {
     setOpaque (true);
 
@@ -45,6 +47,7 @@ MainComponent::MainComponent (VocalEditorAudioProcessor& p)
 
     addAndMakeVisible (timeline);
     addAndMakeVisible (waveform);
+    addAndMakeVisible (selectedEventPanel);
 
     startTimerHz (20);
 }
@@ -94,8 +97,13 @@ void MainComponent::resized()
     auto timelineArea = bounds.removeFromTop (28);
     timeline.setBounds (timelineArea.reduced (4, 0));
 
-    // Waveform fills the rest
-    waveform.setBounds (bounds.reduced (4, 2));
+    // Main editing area: waveform gets most of the width; inspector stays docked.
+    auto content = bounds.reduced (4, 2);
+    const int inspectorWidth = juce::jlimit (250, 340, content.getWidth() / 4);
+    auto inspectorArea = content.removeFromRight (inspectorWidth);
+    content.removeFromRight (6);
+    waveform.setBounds (content);
+    selectedEventPanel.setBounds (inspectorArea);
 }
 
 //==============================================================================
