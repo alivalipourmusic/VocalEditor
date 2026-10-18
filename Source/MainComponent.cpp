@@ -109,6 +109,34 @@ MainComponent::MainComponent (VocalEditorAudioProcessor& p)
     segmentTypeCombo.addKeyListener (this);
     addAndMakeVisible (segmentTypeCombo);
 
+    deEsserToggle.setColour (juce::ToggleButton::textColourId, textColour);
+    deEsserToggle.setToggleState (processor.isDeEsserEnabled(), juce::dontSendNotification);
+    deEsserToggle.onClick = [this] { processor.setDeEsserEnabled (deEsserToggle.getToggleState()); };
+    deEsserToggle.setTooltip ("Enable split-band de-essing on the processed audition/export.");
+    addAndMakeVisible (deEsserToggle);
+
+    auto setupDeEsserSlider = [this] (juce::Slider& slider, double min, double max, double step, const juce::String& suffix, double initial)
+    {
+        slider.setRange (min, max, step);
+        slider.setValue (initial, juce::dontSendNotification);
+        slider.setTextValueSuffix (suffix);
+        slider.setSliderStyle (juce::Slider::LinearHorizontal);
+        slider.setTextBoxStyle (juce::Slider::TextBoxRight, false, 56, 20);
+        slider.setColour (juce::Slider::thumbColourId, accentColour);
+        slider.setColour (juce::Slider::textBoxTextColourId, textColour);
+        slider.setColour (juce::Slider::textBoxBackgroundColourId, panelColour);
+        slider.addKeyListener (this);
+        addAndMakeVisible (slider);
+    };
+    setupDeEsserSlider (deEsserFrequencySlider, 2500.0, 12000.0, 100.0, " Hz", processor.getDeEsserFrequency());
+    setupDeEsserSlider (deEsserThresholdSlider, -60.0, -6.0, 1.0, " dB", processor.getDeEsserThreshold());
+    setupDeEsserSlider (deEsserReductionSlider, 0.0, 18.0, 1.0, " dB", processor.getDeEsserMaxReduction());
+    deEsserFrequencySlider.setTooltip ("Sibilance detection frequency");
+    deEsserThresholdSlider.setTooltip ("Detection threshold");
+    deEsserReductionSlider.setTooltip ("Maximum high-band attenuation");
+    for (auto* slider : { &deEsserFrequencySlider, &deEsserThresholdSlider, &deEsserReductionSlider })
+        slider->onValueChange = [this] { deEsserChanged(); };
+
     addAndMakeVisible (timeline);
     addAndMakeVisible (waveform);
     addAndMakeVisible (eventPanel);
@@ -175,6 +203,13 @@ void MainComponent::resized()
     targetLevelSlider.setBounds (analysisBar.removeFromLeft (112).reduced (1, 5));
     selectedOnlyToggle.setBounds (analysisBar.removeFromLeft (112).reduced (1, 5));
     segmentTypeCombo.setBounds (analysisBar.removeFromLeft (100).reduced (1, 5));
+
+    auto deEsserBar = bounds.removeFromTop (38);
+    deEsserBar.reduce (8, 1);
+    deEsserToggle.setBounds (deEsserBar.removeFromLeft (100).reduced (1, 3));
+    deEsserFrequencySlider.setBounds (deEsserBar.removeFromLeft (220).reduced (2, 3));
+    deEsserThresholdSlider.setBounds (deEsserBar.removeFromLeft (220).reduced (2, 3));
+    deEsserReductionSlider.setBounds (deEsserBar.removeFromLeft (220).reduced (2, 3));
 
     // Status bar
     auto statusBar = bounds.removeFromBottom (28);
@@ -341,6 +376,14 @@ void MainComponent::autoSegmentClicked()
     statusLabel.setText ("Auto Segment: created " + juce::String (count)
                          + " " + segmentLabel + ". This is silence-based detection; review boundaries.",
                          juce::dontSendNotification);
+}
+
+void MainComponent::deEsserChanged()
+{
+    processor.setDeEsserParameters (
+        static_cast<float> (deEsserFrequencySlider.getValue()),
+        static_cast<float> (deEsserThresholdSlider.getValue()),
+        static_cast<float> (deEsserReductionSlider.getValue()));
 }
 
 void MainComponent::levelProcessClicked()
