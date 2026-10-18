@@ -753,11 +753,17 @@ bool VocalEditorAudioProcessor::exportProcessedAudio (const juce::File& file, ju
         return fail ("Could not prepare the output file for writing.");
 
     const int bitsPerSample = extension == ".wav" ? 24 : 24;
-    auto writer = std::unique_ptr<juce::AudioFormatWriter> (
-        format->createWriterFor (std::move (outputStream),
-                                 currentSampleRate.load (std::memory_order_acquire),
-                                 static_cast<unsigned int> (snapshot.getNumChannels()),
-                                 bitsPerSample, {}, 0));
+    // JUCE 8's AudioFormat API accepts a raw stream pointer. Keep the
+    // unique_ptr until writer creation succeeds so a failed writer does not
+    // leak the output stream.
+    auto* rawWriter = format->createWriterFor (
+        outputStream.get(),
+        currentSampleRate.load (std::memory_order_acquire),
+        static_cast<unsigned int> (snapshot.getNumChannels()),
+        bitsPerSample, {}, 0);
+    if (rawWriter != nullptr)
+        outputStream.release();
+    auto writer = std::unique_ptr<juce::AudioFormatWriter> (rawWriter);
     if (writer == nullptr)
         return fail ("Could not create an audio writer for the selected format.");
 
@@ -1125,7 +1131,10 @@ void VocalEditorAudioProcessor::recordEventUndo (const juce::XmlElement& before,
     if (before.toString() == after.toString())
         return;
 
-    undoManager.perform (new EventStateAction (*this, before, after, actionName), coalesceMs);
+    // JUCE's second perform() argument is a transaction name, not a time
+    // interval. Use the action name to create meaningful Undo history.
+    juce::ignoreUnused (coalesceMs);
+    undoManager.perform (new EventStateAction (*this, before, after, actionName), actionName);
 }
 
 VocalEvent* VocalEditorAudioProcessor::createEventFromSelection (VocalEvent::Type type)
