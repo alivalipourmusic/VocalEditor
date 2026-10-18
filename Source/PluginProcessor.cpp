@@ -1131,12 +1131,20 @@ void VocalEditorAudioProcessor::recordEventUndo (const juce::XmlElement& before,
     if (before.toString() == after.toString())
         return;
 
-    // JUCE's second perform() argument is a transaction name, not a time
-    // interval. Use explicit transactions for each edit and keep the existing
-    // parameter temporarily for source compatibility with coalescing callers.
-    juce::ignoreUnused (coalesceMs);
-    undoManager.beginNewTransaction (actionName);
+    // JUCE coalesces actions inside a transaction, not by passing a time
+    // interval to perform(). Keep rapid gain/fade drags in one transaction.
+    const auto now = juce::Time::getMillisecondCounter();
+    const bool canCoalesce = coalesceMs > 0
+        && lastUndoActionName == actionName
+        && static_cast<juce::uint32> (now - lastUndoActionTimeMs)
+               <= static_cast<juce::uint32> (coalesceMs);
+
+    if (! canCoalesce)
+        undoManager.beginNewTransaction (actionName);
+
     undoManager.perform (new EventStateAction (*this, before, after, actionName));
+    lastUndoActionName = actionName;
+    lastUndoActionTimeMs = now;
 }
 
 VocalEvent* VocalEditorAudioProcessor::createEventFromSelection (VocalEvent::Type type)
