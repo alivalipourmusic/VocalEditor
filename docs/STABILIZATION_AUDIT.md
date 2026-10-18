@@ -105,6 +105,16 @@ The project currently has no dedicated test target visible in the inspected CMak
 - [ ] Add stress tests for concurrent render readers and repeated source-file/sample-rate changes.
 - [ ] Compile and run Windows tests; this change has not yet been build-verified.
 
+## Phase 11 progress: large-file memory preflight
+
+- [x] Add overflow-safe preflight for channel count, sample count, byte-size multiplication and AudioBuffer integer indexing.
+- [x] Reject full-buffer source allocations above 2 GiB before allocating memory; this is a defensive limit, not a substitute for future streaming/chunked processing.
+- [x] Apply the same guard to direct audio import and project source-audio loading.
+- [x] Catch allocation failures during staged source-buffer allocation/decoding and return a readable error without replacing the current project/audio.
+- [x] Add unit coverage for valid small buffers, zero channels/samples, byte-limit violations and sample counts beyond AudioBuffer indexing limits.
+- [ ] Compile and execute tests on Windows; not build-verified in this environment.
+- [ ] Future architecture work: stream or process long files in chunks instead of requiring full source and processed copies in RAM.
+
 ## Status clarification
 
 Earlier sections describe findings from the initial audit snapshot. Since then, state serialization, safer staged import, event snapshot undo actions, processed audio export, and the sample-rate separation above have been added on this branch. The outstanding items in the validation checklist remain unverified until a real build and tests run.
