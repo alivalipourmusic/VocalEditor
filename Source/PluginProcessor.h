@@ -163,6 +163,8 @@ private:
     juce::Array<juce::Uuid> selectedEventIds;
 
     juce::UndoManager undoManager;
+    juce::String lastUndoActionName;
+    juce::uint32 lastUndoActionTimeMs = 0;
 
     std::unique_ptr<juce::XmlElement> createStateXml() const;
     bool restoreStateFromXml (const juce::XmlElement& xml, juce::String& errorMessage);
