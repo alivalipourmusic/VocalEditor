@@ -613,11 +613,30 @@ void VocalEditorAudioProcessor::updateProcessedBuffer()
         return;
     }
 
-    target.setSize (audioBuffer.getNumChannels(), audioBuffer.getNumSamples(), false, false, true);
-    target.makeCopyOf (audioBuffer, true);
-    for (const auto* event : eventList.getAll())
-        if (event != nullptr)
-            applyEventToBuffer (*event, target);
+    // The rendered copy is another full-size float buffer. Preflight its
+    // allocation independently, then publish only after the entire render succeeds.
+    if (! VocalAudioMath::isReasonableAudioAllocation (audioBuffer.getNumChannels(),
+                                                        audioBuffer.getNumSamples()))
+    {
+        processedBufferUpdatePending.store (true, std::memory_order_release);
+        return;
+    }
+
+    try
+    {
+        target.setSize (audioBuffer.getNumChannels(), audioBuffer.getNumSamples(), false, false, true);
+        target.makeCopyOf (audioBuffer, true);
+        for (const auto* event : eventList.getAll())
+            if (event != nullptr)
+                applyEventToBuffer (*event, target);
+    }
+    catch (const std::bad_alloc&)
+    {
+        // targetIndex is not published, so the previous active render remains
+        // valid. Leave the update pending instead of exposing a partial render.
+        processedBufferUpdatePending.store (true, std::memory_order_release);
+        return;
+    }
 
     processedBufferSampleRates[static_cast<size_t> (targetIndex)] =
         currentSampleRate.load (std::memory_order_acquire);
