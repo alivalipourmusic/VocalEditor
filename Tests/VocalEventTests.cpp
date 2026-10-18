@@ -1,4 +1,5 @@
 #include "VocalEvent.h"
+#include "AudioResampling.h"
 
 #include <cmath>
 #include <iostream>
@@ -63,6 +64,36 @@ namespace
         }
     }
 
+    void testSampleRateMappingAcrossRates()
+    {
+        const double sourcePosition = VocalAudioResampler::sourcePositionForOutputSample (
+            0.0, 48000, 44100.0, 48000.0);
+        check (std::abs (sourcePosition - 44100.0) < 1.0e-6,
+               "one second of 48 kHz output maps to one second of 44.1 kHz source");
+
+        const double offsetPosition = VocalAudioResampler::sourcePositionForOutputSample (
+            2.0, 24000, 44100.0, 48000.0);
+        check (std::abs (offsetPosition - 88200.0) < 1.0e-6,
+               "resampling keeps timeline offsets in seconds");
+    }
+
+    void testLinearInterpolation()
+    {
+        juce::AudioBuffer<float> source (1, 3);
+        source.setSample (0, 0, 0.0f);
+        source.setSample (0, 1, 1.0f);
+        source.setSample (0, 2, 3.0f);
+
+        check (near (VocalAudioResampler::interpolateLinear (source, 0, 0.0), 0.0f),
+               "interpolation returns the first sample at an integer position");
+        check (near (VocalAudioResampler::interpolateLinear (source, 0, 1.5), 2.0f),
+               "fractional sample positions are linearly interpolated");
+        check (near (VocalAudioResampler::interpolateLinear (source, 0, 8.0), 3.0f),
+               "positions past the end clamp to the last sample");
+        check (near (VocalAudioResampler::interpolateLinear (source, 2, 1.0), 0.0f),
+               "invalid channels return silence");
+    }
+
     void testEmptyEnvelopeAndInvalidRanges()
     {
         VocalEvent event;
@@ -89,6 +120,8 @@ int main()
     testEnvelopeSlicePreservesInterpolatedBoundaries();
     testEnvelopeSliceAtExistingPoint();
     testEmptyEnvelopeAndInvalidRanges();
+    testSampleRateMappingAcrossRates();
+    testLinearInterpolation();
 
     if (failures == 0)
     {
