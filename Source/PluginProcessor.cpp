@@ -1,6 +1,7 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
 #include "AudioResampling.h"
+#include "AudioProcessingMath.h"
 
 #include <cmath>
 #include <limits>
@@ -539,20 +540,8 @@ void VocalEditorAudioProcessor::applyEventToBuffer (const VocalEvent& event, juc
     int fadeInSamples = juce::jlimit (0, eventLength, static_cast<int> (std::round (event.fadeInMs * 0.001 * currentSampleRate)));
     int fadeOutSamples = juce::jlimit (0, eventLength, static_cast<int> (std::round (event.fadeOutMs * 0.001 * currentSampleRate)));
 
-    // On very short regions, scale both fades so they do not overlap.
-    const int fadeTotal = fadeInSamples + fadeOutSamples;
-    if (fadeTotal > eventLength && fadeTotal > 0)
-    {
-        const double scale = static_cast<double> (eventLength) / static_cast<double> (fadeTotal);
-        fadeInSamples = static_cast<int> (std::floor (fadeInSamples * scale));
-        fadeOutSamples = eventLength - fadeInSamples;
-    }
-
-    auto curveValue = [] (double x, VocalEvent::FadeCurve curve)
-    {
-        x = juce::jlimit (0.0, 1.0, x);
-        return curve == VocalEvent::FadeCurve::Smooth ? x * x * (3.0 - 2.0 * x) : x;
-    };
+    // Keep fades within the event and make their endpoints exact.
+    VocalAudioMath::fitFadesToEvent (eventLength, fadeInSamples, fadeOutSamples);
 
     for (int sample = startSample; sample < endSample; ++sample)
     {
@@ -563,19 +552,11 @@ void VocalEditorAudioProcessor::applyEventToBuffer (const VocalEvent& event, juc
             : event.getEnvelopeGainDb (static_cast<float> (normalized));
         const float gain = juce::Decibels::decibelsToGain (envelopeDb);
 
-        double fadeGain = 1.0;
-        if (fadeInSamples > 0 && localSample < fadeInSamples)
-        {
-            const double progress = static_cast<double> (localSample) / juce::jmax (1, fadeInSamples);
-            fadeGain *= curveValue (progress, event.fadeInCurve);
-        }
-        if (fadeOutSamples > 0 && localSample >= eventLength - fadeOutSamples)
-        {
-            const double progress = static_cast<double> (eventLength - 1 - localSample) / juce::jmax (1, fadeOutSamples);
-            fadeGain *= curveValue (progress, event.fadeOutCurve);
-        }
+        const float fadeGain = VocalAudioMath::fadeGainAtSample (
+            localSample, eventLength, fadeInSamples, fadeOutSamples,
+            event.fadeInCurve, event.fadeOutCurve);
 
-        const float totalGain = gain * static_cast<float> (fadeGain);
+        const float totalGain = gain * fadeGain;
         for (int channel = 0; channel < target.getNumChannels(); ++channel)
             target.setSample (channel, sample, target.getSample (channel, sample) * totalGain);
     }
