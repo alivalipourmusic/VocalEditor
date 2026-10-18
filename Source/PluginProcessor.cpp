@@ -1410,9 +1410,7 @@ void VocalEditorAudioProcessor::mergeEvents (const juce::Uuid& idA, const juce::
     // fades can be represented explicitly, reject merges that would erase them.
     if (gap < -1.0e-6 || gap > 1.0e-6
         || a->fadeOutMs > 1.0e-6 || b->fadeInMs > 1.0e-6
-        || std::abs (a->dynamicGainDb) > 1.0e-6f || std::abs (b->dynamicGainDb) > 1.0e-6f
-        || a->gainTransitionInMs > 1.0e-6 || a->gainTransitionOutMs > 1.0e-6
-        || b->gainTransitionInMs > 1.0e-6 || b->gainTransitionOutMs > 1.0e-6)
+        || std::abs (a->dynamicGainDb) > 1.0e-6f || std::abs (b->dynamicGainDb) > 1.0e-6f)
         return;
 
     // A single merged envelope cannot represent a discontinuity at the join.
