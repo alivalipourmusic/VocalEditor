@@ -399,9 +399,11 @@ bool VocalEditorAudioProcessor::restoreStateFromXml (const juce::XmlElement& xml
         }
 
         if (! VocalAudioMath::isReasonableAudioAllocation (static_cast<int> (reader->numChannels),
-                                                            reader->lengthInSamples))
+                                                            reader->lengthInSamples)
+            || ! VocalAudioMath::isReasonableAudioWorkingSet (static_cast<int> (reader->numChannels),
+                                                               reader->lengthInSamples))
         {
-            errorMessage = "The source audio file is too large to load safely into memory (limit: 2 GiB per audio buffer).";
+            errorMessage = "The source audio file exceeds the safe memory budget (up to 4 GiB for source plus render buffers).";
             return false;
         }
 
@@ -616,7 +618,9 @@ void VocalEditorAudioProcessor::updateProcessedBuffer()
     // The rendered copy is another full-size float buffer. Preflight its
     // allocation independently, then publish only after the entire render succeeds.
     if (! VocalAudioMath::isReasonableAudioAllocation (audioBuffer.getNumChannels(),
-                                                        audioBuffer.getNumSamples()))
+                                                        audioBuffer.getNumSamples())
+        || ! VocalAudioMath::isReasonableAudioWorkingSet (audioBuffer.getNumChannels(),
+                                                           audioBuffer.getNumSamples()))
     {
         processedBufferUpdatePending.store (true, std::memory_order_release);
         return;
@@ -1375,8 +1379,10 @@ bool VocalEditorAudioProcessor::loadAudioFile (const juce::File& file, juce::Str
         return fail ("The selected audio file has invalid duration, channel count, or sample rate.");
 
     if (! VocalAudioMath::isReasonableAudioAllocation (static_cast<int> (reader->numChannels),
-                                                        reader->lengthInSamples))
-        return fail ("The selected audio file is too large to load safely into memory (limit: 2 GiB per audio buffer).");
+                                                        reader->lengthInSamples)
+        || ! VocalAudioMath::isReasonableAudioWorkingSet (static_cast<int> (reader->numChannels),
+                                                           reader->lengthInSamples))
+        return fail ("The selected audio file exceeds the safe memory budget (up to 4 GiB for source plus render buffers).");
 
     juce::AudioBuffer<float> stagedAudio;
     try
