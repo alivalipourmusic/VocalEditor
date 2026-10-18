@@ -37,6 +37,8 @@ public:
     double getVisibleDuration() const { return visibleEndTime - visibleStartTime; }
 
     void clearSelection();
+    void setAutomationMode (bool enabled) { automationMode = enabled; repaint(); }
+    bool isAutomationMode() const { return automationMode; }
     void audioFileLoaded();
     void changeListenerCallback (juce::ChangeBroadcaster* source) override;
 
@@ -46,7 +48,8 @@ private:
         None,
         Selecting,
         FadeIn,
-        FadeOut
+        FadeOut,
+        AutomationPoint
     };
 
     void timerCallback() override;
@@ -55,6 +58,10 @@ private:
     double xToTime (float x) const;
     void drawWaveform (juce::Graphics& g);
     void drawEvents (juce::Graphics& g);
+    void drawAutomation (juce::Graphics& g, const VocalEvent& event, bool selected);
+    int hitTestAutomationPoint (const VocalEvent& event, float x, float y) const;
+    float yToGainDb (float y) const;
+    float gainDbToY (float gainDb) const;
     void drawEventWaveform (juce::Graphics& g, const VocalEvent& event, float x1, float x2);
     void drawFadeHandles (juce::Graphics& g, const VocalEvent& e, bool isSelected);
     void drawSelection (juce::Graphics& g);
@@ -76,6 +83,9 @@ private:
     double selectionStartTime = 0.0;
     juce::Uuid fadeDragEventId;
     double fadeDragStartMs = 0.0;
+    bool automationMode = false;
+    int draggedAutomationPoint = -1;
+    juce::Uuid automationEventId;
 
     static constexpr float handleHitRadius = 8.0f;
 

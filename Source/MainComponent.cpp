@@ -25,6 +25,17 @@ MainComponent::MainComponent (VocalEditorAudioProcessor& p)
     zoomOutButton.onClick = [this] { zoomOutClicked(); };
     zoomFitButton.onClick = [this] { zoomFitClicked(); };
     createEventButton.onClick = [this] { createEventClicked(); };
+    automationButton.onClick = [this]
+    {
+        const bool enabled = ! waveform.isAutomationMode();
+        waveform.setAutomationMode (enabled);
+        automationButton.setButtonText (enabled ? "Volume Draw: ON" : "Volume Draw: OFF");
+        automationButton.setColour (juce::TextButton::buttonColourId,
+                                    enabled ? juce::Colour (0xffa16207) : panelColour);
+        statusLabel.setText (enabled ? "Volume automation: click to add points, drag points to edit, right-click a point to remove."
+                                     : "Volume automation drawing disabled.",
+                             juce::dontSendNotification);
+    };
     undoButton.onClick = [this] { undoClicked(); };
     redoButton.onClick = [this] { redoClicked(); };
     autoSegmentButton.onClick = [this] { autoSegmentClicked(); };
@@ -52,7 +63,7 @@ MainComponent::MainComponent (VocalEditorAudioProcessor& p)
     timeLabel.setJustificationType (juce::Justification::centredRight);
     addAndMakeVisible (timeLabel);
 
-    for (auto* btn : { &createEventButton, &undoButton, &redoButton })
+    for (auto* btn : { &createEventButton, &automationButton, &undoButton, &redoButton })
     {
         btn->setColour (juce::TextButton::buttonColourId, panelColour);
         btn->setColour (juce::TextButton::textColourOffId, textColour);
@@ -122,7 +133,7 @@ MainComponent::MainComponent (VocalEditorAudioProcessor& p)
         slider.setValue (initial, juce::dontSendNotification);
         slider.setTextValueSuffix (suffix);
         slider.setSliderStyle (juce::Slider::LinearHorizontal);
-        slider.setTextBoxStyle (juce::Slider::TextBoxRight, false, 56, 20);
+        slider.setTextBoxStyle (juce::Slider::TextBoxRight, false, 48, 20);
         slider.setColour (juce::Slider::thumbColourId, accentColour);
         slider.setColour (juce::Slider::textBoxTextColourId, textColour);
         slider.setColour (juce::Slider::textBoxBackgroundColourId, panelColour);
@@ -215,6 +226,32 @@ MainComponent::~MainComponent()
 void MainComponent::paint (juce::Graphics& g)
 {
     g.fillAll (bgColour);
+
+    g.setColour (juce::Colour (0xff94a3b8));
+    g.setFont (juce::FontOptions (10.5f));
+
+    auto caption = [&g, this] (const juce::Slider& slider, const juce::String& text)
+    {
+        const auto b = slider.getBounds();
+        g.drawText (text, b.getX() + 3, b.getY() - 12, b.getWidth() - 6, 12,
+                    juce::Justification::centredLeft, true);
+    };
+
+    caption (deEsserFrequencySlider, "Frequency");
+    caption (deEsserThresholdSlider, "Threshold");
+    caption (deEsserReductionSlider, "Max reduction");
+    caption (dePlosiveCutoffSlider, "Cutoff");
+    caption (dePlosiveThresholdSlider, "Threshold");
+    caption (dePlosiveReductionSlider, "Reduction");
+    caption (noiseReductionThresholdSlider, "Threshold");
+    caption (noiseReductionAmountSlider, "Amount");
+    caption (noiseReductionReleaseSlider, "Release");
+    caption (roomTailThresholdSlider, "Threshold");
+    caption (roomTailReductionSlider, "Max reduction");
+    caption (roomTailSensitivitySlider, "Sensitivity");
+    caption (spectralLowSlider, "Low");
+    caption (spectralMidSlider, "Mid");
+    caption (spectralHighSlider, "High");
 }
 
 void MainComponent::resized()
@@ -243,6 +280,8 @@ void MainComponent::resized()
     topBar.removeFromLeft (10);
     createEventButton.setBounds (topBar.removeFromLeft (100));
     topBar.removeFromLeft (4);
+    automationButton.setBounds (topBar.removeFromLeft (118));
+    topBar.removeFromLeft (4);
     undoButton.setBounds (topBar.removeFromLeft (48));
     topBar.removeFromLeft (3);
     redoButton.setBounds (topBar.removeFromLeft (48));
@@ -263,40 +302,55 @@ void MainComponent::resized()
     selectedOnlyToggle.setBounds (analysisBar.removeFromLeft (112).reduced (1, 5));
     segmentTypeCombo.setBounds (analysisBar.removeFromLeft (100).reduced (1, 5));
 
-    auto deEsserBar = bounds.removeFromTop (38);
-    deEsserBar.reduce (8, 1);
-    deEsserToggle.setBounds (deEsserBar.removeFromLeft (100).reduced (1, 3));
-    deEsserFrequencySlider.setBounds (deEsserBar.removeFromLeft (220).reduced (2, 3));
-    deEsserThresholdSlider.setBounds (deEsserBar.removeFromLeft (220).reduced (2, 3));
-    deEsserReductionSlider.setBounds (deEsserBar.removeFromLeft (220).reduced (2, 3));
+    const int sidePadding = 8;
+    const int effectLabelWidth = juce::jlimit (112, 170, bounds.getWidth() / 7);
+    const int sliderGap = 6;
+    const int sliderWidth = juce::jmax (90, (bounds.getWidth() - sidePadding * 2 - effectLabelWidth - sliderGap * 3) / 3);
 
-    auto dePlosiveBar = bounds.removeFromTop (38);
-    dePlosiveBar.reduce (8, 1);
-    dePlosiveToggle.setBounds (dePlosiveBar.removeFromLeft (100).reduced (1, 3));
-    dePlosiveCutoffSlider.setBounds (dePlosiveBar.removeFromLeft (220).reduced (2, 3));
-    dePlosiveThresholdSlider.setBounds (dePlosiveBar.removeFromLeft (220).reduced (2, 3));
-    dePlosiveReductionSlider.setBounds (dePlosiveBar.removeFromLeft (220).reduced (2, 3));
+    auto deEsserBar = bounds.removeFromTop (44);
+    deEsserBar.reduce (sidePadding, 1);
+    deEsserToggle.setBounds (deEsserBar.removeFromLeft (effectLabelWidth).reduced (2, 3));
+    deEsserFrequencySlider.setBounds (deEsserBar.removeFromLeft (sliderWidth).withTrimmedTop (12).reduced (2, 1));
+    deEsserBar.removeFromLeft (sliderGap);
+    deEsserThresholdSlider.setBounds (deEsserBar.removeFromLeft (sliderWidth).withTrimmedTop (12).reduced (2, 1));
+    deEsserBar.removeFromLeft (sliderGap);
+    deEsserReductionSlider.setBounds (deEsserBar.removeFromLeft (sliderWidth).withTrimmedTop (12).reduced (2, 1));
 
-    auto noiseReductionBar = bounds.removeFromTop (38);
-    noiseReductionBar.reduce (8, 1);
-    noiseReductionToggle.setBounds (noiseReductionBar.removeFromLeft (130).reduced (1, 3));
-    noiseReductionThresholdSlider.setBounds (noiseReductionBar.removeFromLeft (220).reduced (2, 3));
-    noiseReductionAmountSlider.setBounds (noiseReductionBar.removeFromLeft (220).reduced (2, 3));
-    noiseReductionReleaseSlider.setBounds (noiseReductionBar.removeFromLeft (220).reduced (2, 3));
+    auto dePlosiveBar = bounds.removeFromTop (44);
+    dePlosiveBar.reduce (sidePadding, 1);
+    dePlosiveToggle.setBounds (dePlosiveBar.removeFromLeft (effectLabelWidth).reduced (2, 3));
+    dePlosiveCutoffSlider.setBounds (dePlosiveBar.removeFromLeft (sliderWidth).withTrimmedTop (12).reduced (2, 1));
+    dePlosiveBar.removeFromLeft (sliderGap);
+    dePlosiveThresholdSlider.setBounds (dePlosiveBar.removeFromLeft (sliderWidth).withTrimmedTop (12).reduced (2, 1));
+    dePlosiveBar.removeFromLeft (sliderGap);
+    dePlosiveReductionSlider.setBounds (dePlosiveBar.removeFromLeft (sliderWidth).withTrimmedTop (12).reduced (2, 1));
 
-    auto roomTailBar = bounds.removeFromTop (38);
-    roomTailBar.reduce (8, 1);
-    roomTailReductionToggle.setBounds (roomTailBar.removeFromLeft (130).reduced (1, 3));
-    roomTailThresholdSlider.setBounds (roomTailBar.removeFromLeft (220).reduced (2, 3));
-    roomTailReductionSlider.setBounds (roomTailBar.removeFromLeft (220).reduced (2, 3));
-    roomTailSensitivitySlider.setBounds (roomTailBar.removeFromLeft (220).reduced (2, 3));
+    auto noiseReductionBar = bounds.removeFromTop (44);
+    noiseReductionBar.reduce (sidePadding, 1);
+    noiseReductionToggle.setBounds (noiseReductionBar.removeFromLeft (effectLabelWidth).reduced (2, 3));
+    noiseReductionThresholdSlider.setBounds (noiseReductionBar.removeFromLeft (sliderWidth).withTrimmedTop (12).reduced (2, 1));
+    noiseReductionBar.removeFromLeft (sliderGap);
+    noiseReductionAmountSlider.setBounds (noiseReductionBar.removeFromLeft (sliderWidth).withTrimmedTop (12).reduced (2, 1));
+    noiseReductionBar.removeFromLeft (sliderGap);
+    noiseReductionReleaseSlider.setBounds (noiseReductionBar.removeFromLeft (sliderWidth).withTrimmedTop (12).reduced (2, 1));
 
-    auto spectralBalanceBar = bounds.removeFromTop (38);
-    spectralBalanceBar.reduce (8, 1);
-    spectralBalanceToggle.setBounds (spectralBalanceBar.removeFromLeft (150).reduced (1, 3));
-    spectralLowSlider.setBounds (spectralBalanceBar.removeFromLeft (220).reduced (2, 3));
-    spectralMidSlider.setBounds (spectralBalanceBar.removeFromLeft (220).reduced (2, 3));
-    spectralHighSlider.setBounds (spectralBalanceBar.removeFromLeft (220).reduced (2, 3));
+    auto roomTailBar = bounds.removeFromTop (44);
+    roomTailBar.reduce (sidePadding, 1);
+    roomTailReductionToggle.setBounds (roomTailBar.removeFromLeft (effectLabelWidth).reduced (2, 3));
+    roomTailThresholdSlider.setBounds (roomTailBar.removeFromLeft (sliderWidth).withTrimmedTop (12).reduced (2, 1));
+    roomTailBar.removeFromLeft (sliderGap);
+    roomTailReductionSlider.setBounds (roomTailBar.removeFromLeft (sliderWidth).withTrimmedTop (12).reduced (2, 1));
+    roomTailBar.removeFromLeft (sliderGap);
+    roomTailSensitivitySlider.setBounds (roomTailBar.removeFromLeft (sliderWidth).withTrimmedTop (12).reduced (2, 1));
+
+    auto spectralBalanceBar = bounds.removeFromTop (44);
+    spectralBalanceBar.reduce (sidePadding, 1);
+    spectralBalanceToggle.setBounds (spectralBalanceBar.removeFromLeft (effectLabelWidth).reduced (2, 3));
+    spectralLowSlider.setBounds (spectralBalanceBar.removeFromLeft (sliderWidth).withTrimmedTop (12).reduced (2, 1));
+    spectralBalanceBar.removeFromLeft (sliderGap);
+    spectralMidSlider.setBounds (spectralBalanceBar.removeFromLeft (sliderWidth).withTrimmedTop (12).reduced (2, 1));
+    spectralBalanceBar.removeFromLeft (sliderGap);
+    spectralHighSlider.setBounds (spectralBalanceBar.removeFromLeft (sliderWidth).withTrimmedTop (12).reduced (2, 1));
 
     // Status bar
     auto statusBar = bounds.removeFromBottom (28);
