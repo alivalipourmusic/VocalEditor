@@ -24,6 +24,9 @@ private:
     void gainChanged();
     void fadeInChanged();
     void fadeOutChanged();
+    void dynamicGainChanged();
+    void transitionInChanged();
+    void transitionOutChanged();
     void splitClicked();
     void deleteClicked();
     void resetGainClicked();
@@ -41,6 +44,14 @@ private:
     juce::Label gainLabel;
     juce::Slider gainSlider;
     juce::TextButton resetGainButton { "Reset" };
+
+    // Smooth word dynamics
+    juce::Label dynamicGainLabel;
+    juce::Slider dynamicGainSlider;
+    juce::Label transitionInLabel;
+    juce::Slider transitionInSlider;
+    juce::Label transitionOutLabel;
+    juce::Slider transitionOutSlider;
 
     // Fades
     juce::Label fadeInLabel;
