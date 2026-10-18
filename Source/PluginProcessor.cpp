@@ -1,5 +1,6 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
+#include "AudioResampling.h"
 
 #include <cmath>
 #include <limits>
@@ -168,41 +169,26 @@ void VocalEditorAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, 
 
     for (int i = 0; i < outputSamples; ++i)
     {
-        const double time = startSeconds + static_cast<double> (i) * secondsPerOutputSample;
-        const double sourcePosition = time * sourceRate;
-        if (time >= durationSeconds || sourcePosition >= static_cast<double> (sourceLength))
+        const double sourcePosition = VocalAudioResampler::sourcePositionForOutputSample (
+            startSeconds, i, sourceRate, outputRate);
+        if (sourcePosition >= static_cast<double> (sourceLength))
             break;
-
-        const int index0 = juce::jlimit (0, sourceLength - 1, static_cast<int> (sourcePosition));
-        const int index1 = juce::jmin (index0 + 1, sourceLength - 1);
-        const float fraction = static_cast<float> (sourcePosition - static_cast<double> (index0));
 
         for (int outCh = 0; outCh < outputChannels; ++outCh)
         {
             float sample = 0.0f;
             if (sourceChannels == 1)
-            {
-                const float a = source.getSample (0, index0);
-                const float b = source.getSample (0, index1);
-                sample = a + (b - a) * fraction;
-            }
+                sample = VocalAudioResampler::interpolateLinear (source, 0, sourcePosition);
             else if (outputChannels == 1)
             {
                 for (int inCh = 0; inCh < sourceChannels; ++inCh)
-                {
-                    const float a = source.getSample (inCh, index0);
-                    const float b = source.getSample (inCh, index1);
-                    sample += a + (b - a) * fraction;
-                }
+                    sample += VocalAudioResampler::interpolateLinear (source, inCh, sourcePosition);
                 sample /= static_cast<float> (sourceChannels);
             }
             else
-            {
-                const int inCh = juce::jmin (outCh, sourceChannels - 1);
-                const float a = source.getSample (inCh, index0);
-                const float b = source.getSample (inCh, index1);
-                sample = a + (b - a) * fraction;
-            }
+                sample = VocalAudioResampler::interpolateLinear (
+                    source, juce::jmin (outCh, sourceChannels - 1), sourcePosition);
+
             buffer.setSample (outCh, i, sample);
         }
         ++rendered;
