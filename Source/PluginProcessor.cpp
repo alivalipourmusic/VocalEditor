@@ -961,16 +961,13 @@ bool VocalEditorAudioProcessor::restoreEventState (const juce::XmlElement& state
     // Overlaps multiply event gain in the current renderer, so malformed
     // snapshots must fail atomically rather than partially restore.
     const double audioDuration = getDuration();
-    for (size_t i = 0; i < staged.size(); ++i)
-    {
-        if (staged[i].end > audioDuration + 1.0e-6)
-            return false;
+    std::vector<std::pair<double, double>> snapshotIntervals;
+    snapshotIntervals.reserve (staged.size());
+    for (const auto& event : staged)
+        snapshotIntervals.emplace_back (event.start, event.end);
 
-        for (size_t j = i + 1; j < staged.size(); ++j)
-            if (VocalAudioMath::intervalsOverlap (staged[i].start, staged[i].end,
-                                                   staged[j].start, staged[j].end))
-                return false;
-    }
+    if (! VocalAudioMath::isValidNonOverlappingTimeline (snapshotIntervals, audioDuration))
+        return false;
 
     eventList.clear();
     selectedEvent = nullptr;
