@@ -222,7 +222,13 @@ void MainComponent::loadFile (const juce::File& file)
     if (! file.existsAsFile())
         return;
 
-    processor.loadAudioFile (file);
+    juce::String error;
+    if (! processor.loadAudioFile (file, &error))
+    {
+        statusLabel.setText ("Failed to load file: " + error, juce::dontSendNotification);
+        return;
+    }
+
     waveform.audioFileLoaded();
 
     if (processor.hasAudio())
