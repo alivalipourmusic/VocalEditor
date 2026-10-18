@@ -95,7 +95,6 @@ void MainComponent::resized()
     auto statusBar = bounds.removeFromBottom (24);
     statusLabel.setBounds (statusBar.reduced (10, 3));
 
-    auto timelineArea = bounds.removeFromTop (26);
     const int panelWidth = juce::jlimit (220, 285, bounds.getWidth() / 4);
     auto editorArea = bounds;
     auto panelArea = editorArea.removeFromRight (panelWidth);
@@ -241,4 +240,5 @@ void MainComponent::timerCallback()
     undoButton.setEnabled (processor.canUndo());
     redoButton.setEnabled (processor.canRedo());
     createEventButton.setEnabled (processor.hasAudio());
+    waveform.repaint();
 }
