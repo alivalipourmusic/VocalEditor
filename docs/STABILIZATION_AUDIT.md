@@ -86,6 +86,16 @@ The project currently has no dedicated test target visible in the inspected CMak
 - [ ] Compile and run CTest on Windows; no passing execution is claimed yet.
 - [ ] Confirm restore validation behavior with empty projects and after loading audio of different durations.
 
+## Phase 9 progress: project-load and history safety
+
+- [x] Clear stale Undo/Redo history when source audio is removed; stop playback first and clear the current project reference.
+- [x] Reject duplicate event IDs when parsing a saved project.
+- [x] Validate the complete project timeline against the decoded source audio before committing any loaded state.
+- [x] Reject project events outside source duration, invalid fade lengths, and overlapping event regions.
+- [x] Centralize timeline bounds/overlap rules in a shared helper and add tests for valid adjacency, overlap, out-of-range events, zero-length events and non-finite endpoints.
+- [ ] Compile and execute tests on Windows; no passing run is claimed.
+- [ ] Add processor-level tests for the complete Undo/Redo lifecycle and confirm failed project loads preserve the prior project state.
+
 ## Status clarification
 
 Earlier sections describe findings from the initial audit snapshot. Since then, state serialization, safer staged import, event snapshot undo actions, processed audio export, and the sample-rate separation above have been added on this branch. The outstanding items in the validation checklist remain unverified until a real build and tests run.
