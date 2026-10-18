@@ -207,5 +207,7 @@ ctest --test-dir build -C Release --output-on-failure
 - [x] Add message-thread cleanup for obsolete processed snapshots; the published snapshot and any reader-pinned snapshot are never resized or cleared.
 - [x] Run cleanup from the editor timer so loading a shorter file or clearing audio can release older, larger render buffers after publication moves to a new snapshot.
 - [x] Clear the render-retry-blocked flag when an empty snapshot is successfully published.
+- [x] Stop transport and mark rendering pending before replacing/clearing source audio, preventing the callback from reading a previous file's snapshot with new session metadata.
+- [x] Clamp selection endpoints to the loaded duration and reject non-finite selection times.
 - [x] Remove the duplicate Delete/Backspace shortcut branch and retain a fallback for the currently selected event when the multi-selection list is empty.
 - [ ] Compile and run the Windows build/tests and stress-test load/clear while playback is active; these changes are not runtime-verified here.
