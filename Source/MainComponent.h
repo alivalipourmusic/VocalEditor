@@ -46,6 +46,7 @@ private:
     void dePlosiveChanged();
     void noiseReductionChanged();
     void roomTailReductionChanged();
+    void spectralBalanceChanged();
 
     VocalEditorAudioProcessor& processor;
 
@@ -83,6 +84,10 @@ private:
     juce::Slider roomTailThresholdSlider;
     juce::Slider roomTailReductionSlider;
     juce::Slider roomTailSensitivitySlider;
+    juce::ToggleButton spectralBalanceToggle { "Spectral Balance" };
+    juce::Slider spectralLowSlider;
+    juce::Slider spectralMidSlider;
+    juce::Slider spectralHighSlider;
     juce::ToggleButton selectedOnlyToggle { "Selected only" };
     juce::ComboBox segmentTypeCombo;
     juce::Label analysisLabel;
