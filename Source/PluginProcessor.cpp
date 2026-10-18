@@ -5,6 +5,7 @@
 
 #include <cmath>
 #include <limits>
+#include <new>
 #include <vector>
 
 //==============================================================================
@@ -400,7 +401,7 @@ bool VocalEditorAudioProcessor::restoreStateFromXml (const juce::XmlElement& xml
         if (! VocalAudioMath::isReasonableAudioAllocation (static_cast<int> (reader->numChannels),
                                                             reader->lengthInSamples))
         {
-            errorMessage = "The source audio file is too large to load safely into memory (limit: 8 GiB per audio buffer).";
+            errorMessage = "The source audio file is too large to load safely into memory (limit: 2 GiB per audio buffer).";
             return false;
         }
 
@@ -1356,7 +1357,7 @@ bool VocalEditorAudioProcessor::loadAudioFile (const juce::File& file, juce::Str
 
     if (! VocalAudioMath::isReasonableAudioAllocation (static_cast<int> (reader->numChannels),
                                                         reader->lengthInSamples))
-        return fail ("The selected audio file is too large to load safely into memory (limit: 8 GiB per audio buffer).");
+        return fail ("The selected audio file is too large to load safely into memory (limit: 2 GiB per audio buffer).");
 
     juce::AudioBuffer<float> stagedAudio;
     try
