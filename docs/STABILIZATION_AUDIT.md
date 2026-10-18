@@ -65,6 +65,18 @@ cmake --build build --config Release --parallel 4
 ctest --test-dir build -C Release --output-on-failure
 ```
 
+## Phase 2 progress: persistence and safety
+
+- [x] Add versioned XML state for audio source path, playback position, timeline selection, event metadata, envelope points, and selected event IDs.
+- [x] Wire host `getStateInformation` / `setStateInformation` to the state serializer.
+- [x] Wire `.vocalproj` project save/load methods and editor buttons, including Ctrl+S and Ctrl+Shift+O.
+- [x] Validate project XML fields and stage source-audio decoding before replacing the active session.
+- [x] Make failed audio imports preserve the current session and report the failure in the UI.
+- [x] Replace the single reader-index handoff with per-buffer reader counters; make transport values and audio-availability status atomic.
+- [ ] Build and run automated tests. These changes have been committed but are not yet compiler-verified in this environment.
+- [ ] Project files currently reference the source audio by absolute path; moving the audio file can break relinking. Portable project media packaging is a later task.
+- [ ] Review full audio-thread/UI-thread ownership of waveform and event model access; the current changes do not claim the entire application is race-free.
+
 ## Validation checklist
 
 - [ ] Configure and build Release on Windows with the documented Visual Studio/CMake setup.
