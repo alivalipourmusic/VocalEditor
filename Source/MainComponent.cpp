@@ -306,8 +306,10 @@ void MainComponent::resized()
                           &zoomFitButton, &createEventButton, &automationButton, &undoButton, &redoButton,
                           &autoSegmentButton, &levelProcessButton })
         button->setFont (buttonFont);
-    for (auto* label : { &titleLabel, &statusLabel, &timeLabel, &analysisLabel })
-        label->setFont (juce::FontOptions (static_cast<float> (S (12))));
+    titleLabel.setFont (juce::FontOptions (static_cast<float> (S (18)), juce::Font::bold));
+    statusLabel.setFont (juce::FontOptions (static_cast<float> (S (12))));
+    timeLabel.setFont (juce::FontOptions (static_cast<float> (S (13)), juce::Font::bold));
+    analysisLabel.setFont (juce::FontOptions (static_cast<float> (S (11))));
     for (auto* slider : { &thresholdSlider, &silenceSlider, &paddingSlider, &targetLevelSlider,
                           &deEsserFrequencySlider, &deEsserThresholdSlider, &deEsserReductionSlider,
                           &dePlosiveCutoffSlider, &dePlosiveThresholdSlider, &dePlosiveReductionSlider,
@@ -699,6 +701,7 @@ bool MainComponent::keyPressed (const juce::KeyPress& key, juce::Component* orig
 //==============================================================================
 void MainComponent::timerCallback()
 {
+    repaint(); // Refresh the live output meter at the UI timer rate.
     // Update time display
     double pos = processor.getPlaybackPosition();
     int mins = static_cast<int> (pos) / 60;
