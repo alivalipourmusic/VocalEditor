@@ -191,6 +191,35 @@ namespace
         }
     }
 
+    void testRenderedEventRmsIncludesEnvelopeAndFades()
+    {
+        constexpr double sampleRate = 48000.0;
+        juce::AudioBuffer<float> source (1, 4800);
+        for (int i = 0; i < source.getNumSamples(); ++i)
+            source.setSample (0, i, 0.5f);
+
+        VocalEvent event;
+        event.startTime = 0.025;
+        event.endTime = 0.075;
+        event.gainDb = -6.0f;
+
+        const double flatRms = VocalAudioMath::measureRenderedEventRms (event, source, sampleRate);
+        check (std::abs (flatRms - 0.5 * juce::Decibels::decibelsToGain (-6.0f)) < 1.0e-4,
+               "rendered RMS includes the event's current constant gain");
+
+        event.envelope.add ({ 0.0f, -12.0f });
+        event.envelope.add ({ 1.0f, -12.0f });
+        const double envelopeRms = VocalAudioMath::measureRenderedEventRms (event, source, sampleRate);
+        check (std::abs (envelopeRms - 0.5 * juce::Decibels::decibelsToGain (-12.0f)) < 1.0e-4,
+               "rendered RMS uses custom envelope gain rather than the base gain field");
+
+        event.fadeInMs = 10.0;
+        event.fadeOutMs = 10.0;
+        const double fadedRms = VocalAudioMath::measureRenderedEventRms (event, source, sampleRate);
+        check (fadedRms < envelopeRms,
+               "rendered RMS accounts for fade-in and fade-out attenuation");
+    }
+
     void testAudioAllocationPreflight()
     {
         check (VocalAudioMath::isReasonableAudioAllocation (2, 1000, 100000),
@@ -335,6 +364,7 @@ int main()
     testAudioWorkingSetBudget();
     testMergeEnvelopeBoundaryCompatibility();
     testSignalLevelGainAndFadeRendering();
+    testRenderedEventRmsIncludesEnvelopeAndFades();
 
     if (failures == 0)
     {
