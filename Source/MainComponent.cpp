@@ -151,6 +151,20 @@ MainComponent::MainComponent (VocalEditorAudioProcessor& p)
     for (auto* slider : { &dePlosiveCutoffSlider, &dePlosiveThresholdSlider, &dePlosiveReductionSlider })
         slider->onValueChange = [this] { dePlosiveChanged(); };
 
+    noiseReductionToggle.setColour (juce::ToggleButton::textColourId, textColour);
+    noiseReductionToggle.setToggleState (processor.isNoiseReductionEnabled(), juce::dontSendNotification);
+    noiseReductionToggle.onClick = [this] { processor.setNoiseReductionEnabled (noiseReductionToggle.getToggleState()); };
+    noiseReductionToggle.setTooltip ("Adaptive downward expansion for low-level passages; not spectral denoising under speech.");
+    addAndMakeVisible (noiseReductionToggle);
+    setupDeEsserSlider (noiseReductionThresholdSlider, -80.0, -18.0, 1.0, " dB", processor.getNoiseReductionThreshold());
+    setupDeEsserSlider (noiseReductionAmountSlider, 0.0, 36.0, 1.0, " dB", processor.getNoiseReductionAmount());
+    setupDeEsserSlider (noiseReductionReleaseSlider, 20.0, 1000.0, 10.0, " ms", processor.getNoiseReductionRelease());
+    noiseReductionThresholdSlider.setTooltip ("Noise floor threshold");
+    noiseReductionAmountSlider.setTooltip ("Maximum attenuation for low-level audio");
+    noiseReductionReleaseSlider.setTooltip ("Release time to reduce pumping and abrupt tails");
+    for (auto* slider : { &noiseReductionThresholdSlider, &noiseReductionAmountSlider, &noiseReductionReleaseSlider })
+        slider->onValueChange = [this] { noiseReductionChanged(); };
+
     addAndMakeVisible (timeline);
     addAndMakeVisible (waveform);
     addAndMakeVisible (eventPanel);
@@ -231,6 +245,13 @@ void MainComponent::resized()
     dePlosiveCutoffSlider.setBounds (dePlosiveBar.removeFromLeft (220).reduced (2, 3));
     dePlosiveThresholdSlider.setBounds (dePlosiveBar.removeFromLeft (220).reduced (2, 3));
     dePlosiveReductionSlider.setBounds (dePlosiveBar.removeFromLeft (220).reduced (2, 3));
+
+    auto noiseReductionBar = bounds.removeFromTop (38);
+    noiseReductionBar.reduce (8, 1);
+    noiseReductionToggle.setBounds (noiseReductionBar.removeFromLeft (130).reduced (1, 3));
+    noiseReductionThresholdSlider.setBounds (noiseReductionBar.removeFromLeft (220).reduced (2, 3));
+    noiseReductionAmountSlider.setBounds (noiseReductionBar.removeFromLeft (220).reduced (2, 3));
+    noiseReductionReleaseSlider.setBounds (noiseReductionBar.removeFromLeft (220).reduced (2, 3));
 
     // Status bar
     auto statusBar = bounds.removeFromBottom (28);
@@ -415,6 +436,14 @@ void MainComponent::dePlosiveChanged()
         static_cast<float> (dePlosiveReductionSlider.getValue()));
 }
 
+void MainComponent::noiseReductionChanged()
+{
+    processor.setNoiseReductionParameters (
+        static_cast<float> (noiseReductionThresholdSlider.getValue()),
+        static_cast<float> (noiseReductionAmountSlider.getValue()),
+        static_cast<float> (noiseReductionReleaseSlider.getValue()));
+}
+
 void MainComponent::levelProcessClicked()
 {
     const int count = processor.levelEventsToTarget (
@@ -525,6 +554,17 @@ void MainComponent::timerCallback()
     if (! dePlosiveReductionSlider.isMouseButtonDown()
         && std::abs (dePlosiveReductionSlider.getValue() - processor.getDePlosiveMaxReduction()) > 0.1)
         dePlosiveReductionSlider.setValue (processor.getDePlosiveMaxReduction(), juce::dontSendNotification);
+    if (! noiseReductionToggle.isMouseButtonDown())
+        noiseReductionToggle.setToggleState (processor.isNoiseReductionEnabled(), juce::dontSendNotification);
+    if (! noiseReductionThresholdSlider.isMouseButtonDown()
+        && std::abs (noiseReductionThresholdSlider.getValue() - processor.getNoiseReductionThreshold()) > 0.1)
+        noiseReductionThresholdSlider.setValue (processor.getNoiseReductionThreshold(), juce::dontSendNotification);
+    if (! noiseReductionAmountSlider.isMouseButtonDown()
+        && std::abs (noiseReductionAmountSlider.getValue() - processor.getNoiseReductionAmount()) > 0.1)
+        noiseReductionAmountSlider.setValue (processor.getNoiseReductionAmount(), juce::dontSendNotification);
+    if (! noiseReductionReleaseSlider.isMouseButtonDown()
+        && std::abs (noiseReductionReleaseSlider.getValue() - processor.getNoiseReductionRelease()) > 0.1)
+        noiseReductionReleaseSlider.setValue (processor.getNoiseReductionRelease(), juce::dontSendNotification);
 
     // Update play button text
     playButton.setButtonText (processor.isPlaying() ? "Pause" : "Play");
