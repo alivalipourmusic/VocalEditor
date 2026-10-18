@@ -75,8 +75,8 @@ namespace
 
         const double offsetPosition = VocalAudioResampler::sourcePositionForOutputSample (
             2.0, 24000, 44100.0, 48000.0);
-        check (std::abs (offsetPosition - 88200.0) < 1.0e-6,
-               "resampling keeps timeline offsets in seconds");
+        check (std::abs (offsetPosition - 110250.0) < 1.0e-6,
+               "resampling includes the two-second timeline offset plus half a second of output");
     }
 
     void testLinearInterpolation()
