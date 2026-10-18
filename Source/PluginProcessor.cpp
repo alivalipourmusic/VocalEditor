@@ -93,7 +93,7 @@ void VocalEditorAudioProcessor::changeProgramName (int index, const juce::String
 void VocalEditorAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 {
     juce::ignoreUnused (samplesPerBlock);
-    currentSampleRate = sampleRate;
+    hostOutputSampleRate.store (sampleRate > 0.0 ? sampleRate : 44100.0, std::memory_order_release);
 }
 
 void VocalEditorAudioProcessor::releaseResources()
@@ -125,64 +125,109 @@ void VocalEditorAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, 
 {
     juce::ignoreUnused (midiMessages);
     juce::ScopedNoDenormals noDenormals;
-    
-    auto totalNumInputChannels  = getTotalNumInputChannels();
-    auto totalNumOutputChannels = getTotalNumOutputChannels();
 
-    for (auto i = totalNumInputChannels; i < totalNumOutputChannels; ++i)
-        buffer.clear (i, 0, buffer.getNumSamples());
+    const int totalNumInputChannels = getTotalNumInputChannels();
+    const int totalNumOutputChannels = getTotalNumOutputChannels();
+    for (int ch = totalNumInputChannels; ch < totalNumOutputChannels; ++ch)
+        buffer.clear (ch, 0, buffer.getNumSamples());
 
-    // Standalone/file audition reads an immutable processed snapshot. The
-    // three-buffer handoff avoids blocking the real-time thread while edits render.
-    if (currentlyPlaying && hasAudio())
+    if (! currentlyPlaying.load (std::memory_order_acquire) || ! hasAudio())
+        return;
+
+    int sourceIndex = 0;
+    for (;;)
     {
-        int sourceIndex = 0;
-        for (;;)
-        {
-            sourceIndex = activeProcessedBuffer.load (std::memory_order_acquire);
-            processedBufferReaders[static_cast<size_t> (sourceIndex)].fetch_add (1, std::memory_order_acq_rel);
-            if (sourceIndex == activeProcessedBuffer.load (std::memory_order_acquire))
-                break;
+        sourceIndex = activeProcessedBuffer.load (std::memory_order_acquire);
+        processedBufferReaders[static_cast<size_t> (sourceIndex)].fetch_add (1, std::memory_order_acq_rel);
+        if (sourceIndex == activeProcessedBuffer.load (std::memory_order_acquire))
+            break;
 
-            processedBufferReaders[static_cast<size_t> (sourceIndex)].fetch_sub (1, std::memory_order_release);
-        }
-
-        const auto& source = processedBuffers[static_cast<size_t> (sourceIndex)];
-        const int numSamplesToPlay = buffer.getNumSamples();
-        const int sourceLength = source.getNumSamples();
-        const int position = playbackSamplePosition;
-        const int remainingSamples = sourceLength - position;
-
-        if (remainingSamples <= 0)
-        {
-            currentlyPlaying = false;
-            playbackPosition = 0.0;
-            playbackSamplePosition = 0;
-            buffer.clear();
-            processedBufferReaders[static_cast<size_t> (sourceIndex)].fetch_sub (1, std::memory_order_release);
-            return;
-        }
-
-        const int samplesToCopy = juce::jmin (numSamplesToPlay, remainingSamples);
-        const int numChannels = juce::jmin (buffer.getNumChannels(), source.getNumChannels());
-        for (int ch = 0; ch < numChannels; ++ch)
-            buffer.copyFrom (ch, 0, source, ch, position, samplesToCopy);
-        for (int ch = numChannels; ch < buffer.getNumChannels(); ++ch)
-            buffer.clear (ch, 0, numSamplesToPlay);
-
-        if (samplesToCopy < numSamplesToPlay)
-        {
-            for (int ch = 0; ch < buffer.getNumChannels(); ++ch)
-                buffer.clear (ch, samplesToCopy, numSamplesToPlay - samplesToCopy);
-            currentlyPlaying = false;
-        }
-
-        playbackSamplePosition = position + samplesToCopy;
-        playbackPosition = static_cast<double> (playbackSamplePosition) / currentSampleRate;
         processedBufferReaders[static_cast<size_t> (sourceIndex)].fetch_sub (1, std::memory_order_release);
     }
-    // When the file audition transport is stopped, VST3 remains a pass-through
-    // processor for host input. Live host-input editing is a separate integration step.
+
+    const auto& source = processedBuffers[static_cast<size_t> (sourceIndex)];
+    const int sourceLength = source.getNumSamples();
+    const int sourceChannels = source.getNumChannels();
+    const int outputSamples = buffer.getNumSamples();
+    const int outputChannels = buffer.getNumChannels();
+    const double sourceRate = currentSampleRate.load (std::memory_order_acquire);
+    const double outputRate = hostOutputSampleRate.load (std::memory_order_acquire);
+    const double startSeconds = playbackPosition.load (std::memory_order_acquire);
+
+    if (sourceLength <= 0 || sourceChannels <= 0 || sourceRate <= 0.0 || outputRate <= 0.0)
+    {
+        currentlyPlaying.store (false, std::memory_order_release);
+        buffer.clear();
+        processedBufferReaders[static_cast<size_t> (sourceIndex)].fetch_sub (1, std::memory_order_release);
+        return;
+    }
+
+    const double durationSeconds = static_cast<double> (sourceLength) / sourceRate;
+    const double secondsPerOutputSample = 1.0 / outputRate;
+    int rendered = 0;
+
+    for (int i = 0; i < outputSamples; ++i)
+    {
+        const double time = startSeconds + static_cast<double> (i) * secondsPerOutputSample;
+        const double sourcePosition = time * sourceRate;
+        if (time >= durationSeconds || sourcePosition >= static_cast<double> (sourceLength))
+            break;
+
+        const int index0 = juce::jlimit (0, sourceLength - 1, static_cast<int> (sourcePosition));
+        const int index1 = juce::jmin (index0 + 1, sourceLength - 1);
+        const float fraction = static_cast<float> (sourcePosition - static_cast<double> (index0));
+
+        for (int outCh = 0; outCh < outputChannels; ++outCh)
+        {
+            float sample = 0.0f;
+            if (sourceChannels == 1)
+            {
+                const float a = source.getSample (0, index0);
+                const float b = source.getSample (0, index1);
+                sample = a + (b - a) * fraction;
+            }
+            else if (outputChannels == 1)
+            {
+                for (int inCh = 0; inCh < sourceChannels; ++inCh)
+                {
+                    const float a = source.getSample (inCh, index0);
+                    const float b = source.getSample (inCh, index1);
+                    sample += a + (b - a) * fraction;
+                }
+                sample /= static_cast<float> (sourceChannels);
+            }
+            else
+            {
+                const int inCh = juce::jmin (outCh, sourceChannels - 1);
+                const float a = source.getSample (inCh, index0);
+                const float b = source.getSample (inCh, index1);
+                sample = a + (b - a) * fraction;
+            }
+            buffer.setSample (outCh, i, sample);
+        }
+        ++rendered;
+    }
+
+    if (rendered < outputSamples)
+        for (int ch = 0; ch < outputChannels; ++ch)
+            buffer.clear (ch, rendered, outputSamples - rendered);
+
+    const double nextPosition = startSeconds + static_cast<double> (rendered) * secondsPerOutputSample;
+    if (rendered < outputSamples || nextPosition >= durationSeconds)
+    {
+        currentlyPlaying.store (false, std::memory_order_release);
+        playbackPosition.store (0.0, std::memory_order_release);
+        playbackSamplePosition.store (0, std::memory_order_release);
+    }
+    else
+    {
+        playbackPosition.store (nextPosition, std::memory_order_release);
+        playbackSamplePosition.store (
+            juce::jlimit (0, sourceLength, static_cast<int> (std::floor (nextPosition * sourceRate))),
+            std::memory_order_release);
+    }
+
+    processedBufferReaders[static_cast<size_t> (sourceIndex)].fetch_sub (1, std::memory_order_release);
 }
 
 //==============================================================================
