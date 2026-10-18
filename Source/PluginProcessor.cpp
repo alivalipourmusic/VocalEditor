@@ -210,6 +210,10 @@ void VocalEditorAudioProcessor::getStateInformation (juce::MemoryBlock& destData
     state.setProperty ("noiseReductionThresholdDb", noiseReductionThresholdDb, nullptr);
     state.setProperty ("noiseReductionAmountDb", noiseReductionAmountDb, nullptr);
     state.setProperty ("noiseReductionReleaseMs", noiseReductionReleaseMs, nullptr);
+    state.setProperty ("roomTailReductionEnabled", roomTailReductionEnabled, nullptr);
+    state.setProperty ("roomTailThresholdDb", roomTailThresholdDb, nullptr);
+    state.setProperty ("roomTailMaxReductionDb", roomTailMaxReductionDb, nullptr);
+    state.setProperty ("roomTailSensitivity", roomTailSensitivity, nullptr);
 
     for (const auto* event : eventList.getAll())
     {
@@ -269,6 +273,10 @@ void VocalEditorAudioProcessor::setStateInformation (const void* data, int sizeI
     noiseReductionThresholdDb = juce::jlimit (-80.0f, -18.0f, static_cast<float> (state.getProperty ("noiseReductionThresholdDb", -48.0f)));
     noiseReductionAmountDb = juce::jlimit (0.0f, 36.0f, static_cast<float> (state.getProperty ("noiseReductionAmountDb", 18.0f)));
     noiseReductionReleaseMs = juce::jlimit (20.0f, 1000.0f, static_cast<float> (state.getProperty ("noiseReductionReleaseMs", 180.0f)));
+    roomTailReductionEnabled = static_cast<bool> (state.getProperty ("roomTailReductionEnabled", false));
+    roomTailThresholdDb = juce::jlimit (-60.0f, -12.0f, static_cast<float> (state.getProperty ("roomTailThresholdDb", -36.0f)));
+    roomTailMaxReductionDb = juce::jlimit (0.0f, 24.0f, static_cast<float> (state.getProperty ("roomTailMaxReductionDb", 8.0f)));
+    roomTailSensitivity = juce::jlimit (0.1f, 1.0f, static_cast<float> (state.getProperty ("roomTailSensitivity", 0.65f)));
 
     const auto audioPath = state.getProperty ("audioFile").toString();
     const juce::File audioFile (audioPath);
@@ -581,6 +589,65 @@ void VocalEditorAudioProcessor::applyNoiseReductionToBuffer (juce::AudioBuffer<f
     }
 }
 
+void VocalEditorAudioProcessor::setRoomTailReductionEnabled (bool enabled)
+{
+    if (roomTailReductionEnabled == enabled)
+        return;
+    roomTailReductionEnabled = enabled;
+    updateProcessedBuffer();
+}
+
+void VocalEditorAudioProcessor::setRoomTailReductionParameters (float thresholdDb, float maxReductionDb, float tailSensitivity)
+{
+    roomTailThresholdDb = juce::jlimit (-60.0f, -12.0f, thresholdDb);
+    roomTailMaxReductionDb = juce::jlimit (0.0f, 24.0f, maxReductionDb);
+    roomTailSensitivity = juce::jlimit (0.1f, 1.0f, tailSensitivity);
+    updateProcessedBuffer();
+}
+
+void VocalEditorAudioProcessor::applyRoomTailReductionToBuffer (juce::AudioBuffer<float>& buffer)
+{
+    if (! roomTailReductionEnabled || buffer.getNumSamples() == 0 || currentSampleRate <= 0.0)
+        return;
+
+    // Conservative decay-aware attenuation: identify low-level tails following
+    // louder material, then smoothly attenuate only those tails. This does not
+    // estimate or deconvolve a room impulse response.
+    const double sr = currentSampleRate;
+    const float threshold = juce::Decibels::decibelsToGain (roomTailThresholdDb);
+    const float maxAttenuation = juce::Decibels::decibelsToGain (-roomTailMaxReductionDb);
+    const float fast = static_cast<float> (1.0 - std::exp (-1.0 / (sr * 0.004)));
+    const float slow = static_cast<float> (1.0 - std::exp (-1.0 / (sr * (0.12 + 0.55 * roomTailSensitivity))));
+    const float release = static_cast<float> (1.0 - std::exp (-1.0 / (sr * (0.08 + 0.35 * roomTailSensitivity))));
+
+    for (int ch = 0; ch < buffer.getNumChannels(); ++ch)
+    {
+        float envelope = 0.0f;
+        float recentPeak = 0.0f;
+        float gain = 1.0f;
+        auto* samples = buffer.getWritePointer (ch);
+        for (int i = 0; i < buffer.getNumSamples(); ++i)
+        {
+            const float input = samples[i];
+            const float magnitude = std::abs (input);
+            envelope += (magnitude > envelope ? fast : slow) * (magnitude - envelope);
+            recentPeak = juce::jmax (magnitude, recentPeak * 0.9995f);
+
+            float targetGain = 1.0f;
+            const float tailThreshold = threshold * (0.5f + roomTailSensitivity);
+            if (recentPeak > threshold * 2.0f && envelope < tailThreshold && roomTailMaxReductionDb > 0.0f)
+            {
+                const float tailRatio = juce::jlimit (0.0f, 1.0f,
+                    (tailThreshold - envelope) / juce::jmax (tailThreshold, 1.0e-7f));
+                targetGain = 1.0f - tailRatio * (1.0f - maxAttenuation);
+            }
+
+            gain += (targetGain < gain ? fast : release) * (targetGain - gain);
+            samples[i] = input * gain;
+        }
+    }
+}
+
 void VocalEditorAudioProcessor::updateProcessedBuffer()
 {
     // The message thread is the only writer. Never overwrite the published
@@ -617,6 +684,7 @@ void VocalEditorAudioProcessor::updateProcessedBuffer()
     applyDeEsserToBuffer (target);
     applyDePlosiveToBuffer (target);
     applyNoiseReductionToBuffer (target);
+    applyRoomTailReductionToBuffer (target);
 
     activeProcessedBuffer.store (targetIndex, std::memory_order_release);
 }
