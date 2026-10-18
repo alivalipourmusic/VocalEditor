@@ -263,6 +263,23 @@ void VocalEditorAudioProcessor::clearSelection()
     selection.endTime = 0.0;
 }
 
+VocalEvent* VocalEditorAudioProcessor::createEventFromSelection (VocalEvent::Type type)
+{
+    if (! selection.isActive || selection.getLength() < 0.005 || ! hasAudio())
+        return nullptr;
+    auto* event = eventList.add (selection.startTime, selection.endTime, type);
+    setSelectedEvent (event);
+    return event;
+}
+
+void VocalEditorAudioProcessor::setSelectedEvent (VocalEvent* event)
+{
+    selectedEvent = event;
+    selectedEventIds.clear();
+    if (event != nullptr)
+        selectedEventIds.addIfNotAlreadyThere (event->id);
+}
+
 //==============================================================================
 // This creates new instances of the plugin
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()
