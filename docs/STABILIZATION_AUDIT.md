@@ -64,6 +64,17 @@ The project currently has no dedicated test target visible in the inspected CMak
 - [ ] Review fade curve behavior at very short lengths and compare against a reference implementation.
 - [ ] Add signal-level tests that render a known waveform and verify measured output RMS/peak against expected gain and fade values.
 
+## Phase 7 progress: signal-level regression coverage
+
+- [x] Move event gain/envelope/fade rendering into a shared helper so the production processor and unit tests exercise the same DSP code path.
+- [x] Add deterministic constant-signal checks for untouched samples outside an event and the expected -6 dB sample amplitude inside the event.
+- [x] Measure RMS and peak from the rendered interior of the event and compare them with the mathematically expected level.
+- [x] Verify fade-in/fade-out endpoints against the rendered buffer, not only the fade-curve helper.
+- [x] Make Merge conservative: reject separated events and merges that would discard the left event's fade-out or right event's fade-in. The current single-event representation cannot preserve those internal fades without a richer model.
+- [ ] Compile and run CTest on Windows. The test target is configured, but no passing execution is claimed.
+- [ ] Add processor-level integration tests for split/merge/undo using complete event snapshots and rendered audio.
+- [ ] Add sine/noise test signals and frequency-dependent measurements before approving the production resampler.
+
 ## Status clarification
 
 Earlier sections describe findings from the initial audit snapshot. Since then, state serialization, safer staged import, event snapshot undo actions, processed audio export, and the sample-rate separation above have been added on this branch. The outstanding items in the validation checklist remain unverified until a real build and tests run.
