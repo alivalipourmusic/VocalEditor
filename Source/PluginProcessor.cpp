@@ -527,39 +527,7 @@ bool VocalEditorAudioProcessor::loadProject (const juce::File& projectFile,
 //==============================================================================
 void VocalEditorAudioProcessor::applyEventToBuffer (const VocalEvent& event, juce::AudioBuffer<float>& target)
 {
-    if (target.getNumSamples() == 0 || target.getNumChannels() == 0 || currentSampleRate <= 0.0)
-        return;
-
-    const int totalSamples = target.getNumSamples();
-    const int startSample = juce::jlimit (0, totalSamples, static_cast<int> (std::floor (event.startTime * currentSampleRate)));
-    const int endSample = juce::jlimit (startSample, totalSamples, static_cast<int> (std::ceil (event.endTime * currentSampleRate)));
-    const int eventLength = endSample - startSample;
-    if (eventLength <= 0)
-        return;
-
-    int fadeInSamples = juce::jlimit (0, eventLength, static_cast<int> (std::round (event.fadeInMs * 0.001 * currentSampleRate)));
-    int fadeOutSamples = juce::jlimit (0, eventLength, static_cast<int> (std::round (event.fadeOutMs * 0.001 * currentSampleRate)));
-
-    // Keep fades within the event and make their endpoints exact.
-    VocalAudioMath::fitFadesToEvent (eventLength, fadeInSamples, fadeOutSamples);
-
-    for (int sample = startSample; sample < endSample; ++sample)
-    {
-        const int localSample = sample - startSample;
-        const double normalized = eventLength > 1 ? static_cast<double> (localSample) / (eventLength - 1) : 0.0;
-        const float envelopeDb = event.envelope.isEmpty()
-            ? event.gainDb
-            : event.getEnvelopeGainDb (static_cast<float> (normalized));
-        const float gain = juce::Decibels::decibelsToGain (envelopeDb);
-
-        const float fadeGain = VocalAudioMath::fadeGainAtSample (
-            localSample, eventLength, fadeInSamples, fadeOutSamples,
-            event.fadeInCurve, event.fadeOutCurve);
-
-        const float totalGain = gain * fadeGain;
-        for (int channel = 0; channel < target.getNumChannels(); ++channel)
-            target.setSample (channel, sample, target.getSample (channel, sample) * totalGain);
-    }
+    VocalAudioMath::applyEventToBuffer (event, target, currentSampleRate.load (std::memory_order_acquire));
 }
 
 void VocalEditorAudioProcessor::updateProcessedBuffer()
