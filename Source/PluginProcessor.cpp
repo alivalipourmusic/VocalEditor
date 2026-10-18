@@ -531,7 +531,6 @@ void VocalEditorAudioProcessor::splitEvent (const juce::Uuid& id, double splitTi
 
     const double originalStart = event->startTime;
     const double originalEnd = event->endTime;
-    const double originalFadeIn = event->fadeInMs;
     const double originalFadeOut = event->fadeOutMs;
     const auto originalType = event->type;
     const auto originalFadeInCurve = event->fadeInCurve;
