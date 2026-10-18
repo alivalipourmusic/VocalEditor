@@ -150,6 +150,12 @@ public:
     float getRoomTailThreshold() const { return roomTailThresholdDb; }
     float getRoomTailMaxReduction() const { return roomTailMaxReductionDb; }
     float getRoomTailSensitivity() const { return roomTailSensitivity; }
+    void setSpectralBalanceEnabled (bool enabled);
+    bool isSpectralBalanceEnabled() const { return spectralBalanceEnabled; }
+    void setSpectralBalanceParameters (float lowDb, float midDb, float highDb);
+    float getSpectralLowDb() const { return spectralLowDb; }
+    float getSpectralMidDb() const { return spectralMidDb; }
+    float getSpectralHighDb() const { return spectralHighDb; }
 
 private:
     juce::AudioFormatManager formatManager;
