@@ -123,6 +123,7 @@ public:
 
     void updateProcessedBuffer();
     bool isProcessedBufferUpdatePending() const { return processedBufferUpdatePending.load (std::memory_order_acquire); }
+    bool shouldRetryProcessedBufferUpdate() const { return isProcessedBufferUpdatePending() && ! processedBufferUpdateRetryBlocked.load (std::memory_order_acquire); }
 
 private:
     juce::AudioFormatManager formatManager;
@@ -138,6 +139,7 @@ private:
     std::array<double, 3> processedBufferSampleRates { 44100.0, 44100.0, 44100.0 };
     std::atomic<int> activeProcessedBuffer { 0 };
     std::atomic<bool> processedBufferUpdatePending { false };
+    std::atomic<bool> processedBufferUpdateRetryBlocked { false };
     std::array<std::atomic<int>, 3> processedBufferReaders { 0, 0, 0 };
 
     juce::File currentAudioFile;
