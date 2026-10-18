@@ -38,6 +38,10 @@ The three-buffer handoff uses atomic indexes, but the read/write protocol and fa
 
 The project currently has no dedicated test target visible in the inspected CMake configuration. Add automated tests for event model and DSP behavior, then test the standalone app and VST3 in a host.
 
+### Newly confirmed P1: source and host sample rates are conflated
+
+`prepareToPlay()` assigns the host/device sample rate to `currentSampleRate`, while the same value is also used to interpret source-file sample indices, event times, fades, segmentation, and export. When the host rate differs from the imported file's native rate, transport timing and exported duration/sample rate can be wrong. The file-audition path currently copies samples directly instead of resampling. Next audio-engine task: separate source sample rate from host output rate, then implement real-time-safe resampling and regression tests before claiming reliable playback across rates.
+
 ## Recommended implementation order
 
 1. Preserve this branch as a stabilization branch; do not modify the existing feature branch directly.
