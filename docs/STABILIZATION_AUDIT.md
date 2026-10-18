@@ -2,7 +2,7 @@
 
 ## Scope
 
-This audit is based on the current `feature/real-gain-fade` source snapshot. It is a code review, not a claim that the application has passed runtime or Cubase validation.
+This audit tracks the `stabilization/phase-1-audit` branch. It is a code review, not a claim that the application has passed runtime or Cubase validation.
 
 ## Confirmed findings from source inspection
 
@@ -41,6 +41,21 @@ The project currently has no dedicated test target visible in the inspected CMak
 ### Newly confirmed P1: source and host sample rates are conflated
 
 `prepareToPlay()` assigns the host/device sample rate to `currentSampleRate`, while the same value is also used to interpret source-file sample indices, event times, fades, segmentation, and export. When the host rate differs from the imported file's native rate, transport timing and exported duration/sample rate can be wrong. The file-audition path currently copies samples directly instead of resampling. Next audio-engine task: separate source sample rate from host output rate, then implement real-time-safe resampling and regression tests before claiming reliable playback across rates.
+
+## Phase 5 progress: source/host sample-rate separation
+
+- [x] Keep the imported file's native sample rate separate from the host/device output sample rate.
+- [x] Keep timeline duration, event boundaries, fades, segmentation, and export tied to the source file's native sample rate.
+- [x] Map playback positions in seconds and resample source audio to the host output rate without allocating or taking a blocking lock in `processBlock`.
+- [x] Extract sample-position mapping and linear interpolation into a small helper used by the playback path.
+- [x] Add automated test cases for 44.1 kHz source to 48 kHz output mapping, time offsets, fractional interpolation, and invalid channel handling.
+- [ ] Compile and run CTest on Windows; source changes have not been compiler-verified in this environment.
+- [ ] Linear interpolation is a baseline, not a band-limited production resampler. Downsampling can alias; replace with a quality resampler and add frequency-response tests before release.
+- [ ] Verify transport start/stop, seek, end-of-file, mono/stereo conversion, and host sample-rate changes in Standalone and Cubase.
+
+## Status clarification
+
+Earlier sections describe findings from the initial audit snapshot. Since then, state serialization, safer staged import, event snapshot undo actions, processed audio export, and the sample-rate separation above have been added on this branch. The outstanding items in the validation checklist remain unverified until a real build and tests run.
 
 ## Recommended implementation order
 
