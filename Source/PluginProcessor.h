@@ -61,6 +61,8 @@ public:
     juce::AudioThumbnailCache& getThumbnailCache() { return thumbnailCache; }
 
     void setPlaybackPosition (double positionInSeconds);
+    void setProcessingBypassed (bool bypassed);
+    bool isProcessingBypassed() const { return processingBypassed; }
     double getPlaybackPosition() const { return playbackPosition; }
     void startPlayback();
     void stopPlayback();
@@ -167,6 +169,7 @@ private:
     // the audio thread reads one immutable snapshot without taking a blocking lock.
     std::array<juce::AudioBuffer<float>, 3> processedBuffers;
     std::atomic<int> activeProcessedBuffer { 0 };
+    bool processingBypassed = false;
     std::atomic<int> readingProcessedBuffer { -1 };
 
     juce::File currentAudioFile;
