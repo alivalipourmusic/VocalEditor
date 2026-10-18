@@ -302,6 +302,17 @@ bool VocalEditorAudioProcessor::restoreStateFromXml (const juce::XmlElement& xml
         return false;
     }
 
+    const double stagedPlaybackPosition = xml.getDoubleAttribute ("playbackPosition", 0.0);
+    const double stagedSelectionStart = xml.getDoubleAttribute ("selectionStart", 0.0);
+    const double stagedSelectionEnd = xml.getDoubleAttribute ("selectionEnd", 0.0);
+    if (! std::isfinite (stagedPlaybackPosition) || stagedPlaybackPosition < 0.0
+        || ! std::isfinite (stagedSelectionStart) || stagedSelectionStart < 0.0
+        || ! std::isfinite (stagedSelectionEnd) || stagedSelectionEnd < stagedSelectionStart)
+    {
+        errorMessage = "The project contains invalid playback or selection positions.";
+        return false;
+    }
+
     struct EventData
     {
         juce::Uuid id;
@@ -499,14 +510,12 @@ bool VocalEditorAudioProcessor::restoreStateFromXml (const juce::XmlElement& xml
 
     const double maxPosition = audioBuffer.getNumSamples() > 0
         ? static_cast<double> (audioBuffer.getNumSamples()) / currentSampleRate : 0.0;
-    playbackPosition = juce::jlimit (0.0, maxPosition,
-                                     xml.getDoubleAttribute ("playbackPosition", 0.0));
+    playbackPosition = juce::jlimit (0.0, maxPosition, stagedPlaybackPosition);
     playbackSamplePosition = static_cast<int> (playbackPosition * currentSampleRate);
     currentlyPlaying = false;
 
-    selection.startTime = juce::jmax (0.0, xml.getDoubleAttribute ("selectionStart", 0.0));
-    selection.endTime = juce::jmax (selection.startTime,
-                                    xml.getDoubleAttribute ("selectionEnd", 0.0));
+    selection.startTime = stagedSelectionStart;
+    selection.endTime = stagedSelectionEnd;
     selection.isActive = xml.getBoolAttribute ("selectionActive", false)
                          && selection.endTime > selection.startTime;
     if (audioBuffer.getNumSamples() > 0)
