@@ -197,6 +197,8 @@ MainComponent::MainComponent (VocalEditorAudioProcessor& p)
     addAndMakeVisible (timeline);
     addAndMakeVisible (waveform);
     addAndMakeVisible (eventPanel);
+    waveform.addKeyListener (this);
+    eventPanel.addKeyListener (this);
     timeline.addKeyListener (this);
     waveform.addKeyListener (this);
     eventPanel.addKeyListener (this);
@@ -439,7 +441,11 @@ void MainComponent::redoClicked()
 void MainComponent::gainSliderChanged()
 {
     if (auto* event = processor.getSelectedEvent())
+    {
         processor.setEventGain (event->id, static_cast<float> (gainSlider.getValue()));
+        waveform.repaint();
+        eventPanel.repaint();
+    }
 }
 
 
