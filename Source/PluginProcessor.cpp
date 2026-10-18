@@ -1171,7 +1171,11 @@ void VocalEditorAudioProcessor::mergeEvents (const juce::Uuid& idA, const juce::
         std::swap (a, b);
 
     const double gap = b->startTime - a->endTime;
-    if (gap < -1.0e-6 || gap > 0.005)
+
+    // A merged event has only one fade-in and one fade-out. Until internal
+    // fades can be represented explicitly, reject merges that would erase them.
+    if (gap < -1.0e-6 || gap > 1.0e-6
+        || a->fadeOutMs > 1.0e-6 || b->fadeInMs > 1.0e-6)
         return;
 
     const auto before = captureEventState();
