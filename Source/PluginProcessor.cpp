@@ -589,6 +589,7 @@ int VocalEditorAudioProcessor::autoSegmentFromSilence (const SegmentParams& para
     if (! hasAudio() || currentSampleRate <= 0.0)
         return 0;
 
+    const auto before = captureEventState();
     const int totalSamples = audioBuffer.getNumSamples();
     const int frameSamples = juce::jmax (1, static_cast<int> (std::round (currentSampleRate * 0.010)));
     const int numFrames = (totalSamples + frameSamples - 1) / frameSamples;
@@ -679,6 +680,8 @@ int VocalEditorAudioProcessor::autoSegmentFromSilence (const SegmentParams& para
     if (created > 0)
         setSelectedEvent (eventList.get (eventList.size() - created));
     updateProcessedBuffer();
+    if (created > 0 || params.clearExisting)
+        recordEventUndo (before, "Auto Segment");
     return created;
 }
 
@@ -706,6 +709,7 @@ int VocalEditorAudioProcessor::levelEventsToTarget (float targetDb, bool selecte
                 targets.add (event);
     }
 
+    const auto before = captureEventState();
     int processed = 0;
     for (auto* event : targets)
     {
@@ -752,7 +756,10 @@ int VocalEditorAudioProcessor::levelEventsToTarget (float targetDb, bool selecte
     }
 
     if (processed > 0)
+    {
         updateProcessedBuffer();
+        recordEventUndo (before, "Level Process");
+    }
     return processed;
 }
 
@@ -1066,6 +1073,105 @@ void VocalEditorAudioProcessor::deleteEvent (const juce::Uuid& id)
     eventList.removeById (id);
     updateProcessedBuffer();
     recordEventUndo (before, "Delete Event");
+}
+
+void VocalEditorAudioProcessor::deleteSelectedEvents()
+{
+    if (selectedEventIds.isEmpty())
+        return;
+
+    const auto before = captureEventState();
+    bool removedAny = false;
+    const auto idsToDelete = selectedEventIds;
+    for (const auto& id : idsToDelete)
+    {
+        auto* event = eventList.getById (id);
+        if (event != nullptr && ! event->locked)
+        {
+            eventList.removeById (id);
+            removedAny = true;
+        }
+    }
+
+    if (! removedAny)
+        return;
+
+    selectedEvent = nullptr;
+    selectedEventIds.clear();
+    updateProcessedBuffer();
+    recordEventUndo (before, "Delete Selected Events");
+}
+
+void VocalEditorAudioProcessor::mergeEvents (const juce::Uuid& idA, const juce::Uuid& idB)
+{
+    auto* a = eventList.getById (idA);
+    auto* b = eventList.getById (idB);
+    if (a == nullptr || b == nullptr || a == b || a->locked || b->locked || a->type != b->type)
+        return;
+
+    if (b->startTime < a->startTime)
+        std::swap (a, b);
+
+    const double gap = b->startTime - a->endTime;
+    if (gap < -1.0e-6 || gap > 0.005)
+        return;
+
+    const auto before = captureEventState();
+    const double combinedStart = a->startTime;
+    const double combinedEnd = b->endTime;
+    const double combinedLength = combinedEnd - combinedStart;
+    if (combinedLength <= 0.0)
+        return;
+
+    juce::Array<VocalEvent::EnvelopePoint> combinedEnvelope;
+    auto appendMapped = [&] (const VocalEvent& source, double sourceStart, double sourceEnd)
+    {
+        const double sourceLength = sourceEnd - sourceStart;
+        if (sourceLength <= 0.0)
+            return;
+
+        const auto points = source.envelope.isEmpty()
+            ? juce::Array<VocalEvent::EnvelopePoint>()
+            : source.envelope;
+
+        if (points.isEmpty())
+        {
+            combinedEnvelope.add ({ static_cast<float> ((sourceStart - combinedStart) / combinedLength), source.gainDb });
+            combinedEnvelope.add ({ static_cast<float> ((sourceEnd - combinedStart) / combinedLength), source.gainDb });
+        }
+        else
+        {
+            for (const auto& point : points)
+                combinedEnvelope.add ({
+                    static_cast<float> ((sourceStart + point.t * sourceLength - combinedStart) / combinedLength),
+                    point.gainDb
+                });
+        }
+    };
+
+    appendMapped (*a, a->startTime, a->endTime);
+    appendMapped (*b, b->startTime, b->endTime);
+    std::sort (combinedEnvelope.begin(), combinedEnvelope.end(),
+               [] (const auto& left, const auto& right) { return left.t < right.t; });
+
+    // Collapse duplicate boundary points at the join and keep a deterministic curve.
+    juce::Array<VocalEvent::EnvelopePoint> cleanEnvelope;
+    for (const auto& point : combinedEnvelope)
+    {
+        if (! cleanEnvelope.isEmpty() && std::abs (cleanEnvelope.getLast().t - point.t) < 1.0e-6f)
+            cleanEnvelope.getReference (cleanEnvelope.size() - 1).gainDb = point.gainDb;
+        else
+            cleanEnvelope.add (point);
+    }
+
+    a->endTime = combinedEnd;
+    a->fadeOutMs = b->fadeOutMs;
+    a->fadeOutCurve = b->fadeOutCurve;
+    a->envelope = cleanEnvelope;
+    eventList.removeById (b->id);
+    setSelectedEvent (a);
+    updateProcessedBuffer();
+    recordEventUndo (before, "Merge Events");
 }
 
 bool VocalEditorAudioProcessor::loadAudioFile (const juce::File& file, juce::String* errorMessage)
