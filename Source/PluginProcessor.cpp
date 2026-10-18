@@ -789,15 +789,10 @@ int VocalEditorAudioProcessor::autoSegmentFromSilence (const SegmentParams& para
 
 int VocalEditorAudioProcessor::levelEventsToTarget (float targetDb, bool selectedOnly)
 {
-    if (! hasAudio() || currentSampleRate <= 0.0 || eventList.isEmpty())
+    if (! hasAudio() || currentSampleRate <= 0.0)
         return 0;
 
-    targetDb = juce::jlimit (-36.0f, -6.0f, targetDb);
     juce::Array<VocalEvent*> targets;
-
-    if (selectedOnly && selectedEventIds.isEmpty())
-        return 0;
-
     if (selectedOnly)
     {
         for (const auto& id : selectedEventIds)
@@ -811,7 +806,13 @@ int VocalEditorAudioProcessor::levelEventsToTarget (float targetDb, bool selecte
                 targets.add (event);
     }
 
+    // Level Riding: analyse short RMS windows and build a smoothed gain
+    // envelope for each event. This is conventional DSP automation, not AI.
+    constexpr double windowMs = 60.0;
+    constexpr float maxBoostDb = 6.0f;
+    constexpr float maxCutDb = -12.0f;
     int processed = 0;
+
     for (auto* event : targets)
     {
         if (event == nullptr || event->locked)
@@ -821,38 +822,90 @@ int VocalEditorAudioProcessor::levelEventsToTarget (float targetDb, bool selecte
             static_cast<int> (std::floor (event->startTime * currentSampleRate)));
         const int end = juce::jlimit (start, audioBuffer.getNumSamples(),
             static_cast<int> (std::ceil (event->endTime * currentSampleRate)));
-        if (end <= start)
+        if (end - start < 16)
             continue;
 
-        double sumSquares = 0.0;
-        int sampleCount = 0;
-        for (int ch = 0; ch < audioBuffer.getNumChannels(); ++ch)
+        const int windowSamples = juce::jmax (16, static_cast<int> (std::round (currentSampleRate * windowMs * 0.001)));
+        juce::Array<float> positions;
+        juce::Array<float> correctionsDb;
+
+        for (int windowStart = start; windowStart < end; windowStart += windowSamples)
         {
-            const float* data = audioBuffer.getReadPointer (ch, start);
-            for (int i = 0; i < end - start; ++i)
+            const int windowEnd = juce::jmin (end, windowStart + windowSamples);
+            double sumSquares = 0.0;
+            int sampleCount = 0;
+            for (int ch = 0; ch < audioBuffer.getNumChannels(); ++ch)
             {
-                const double sample = data[i];
-                sumSquares += sample * sample;
+                const float* data = audioBuffer.getReadPointer (ch, windowStart);
+                for (int i = 0; i < windowEnd - windowStart; ++i)
+                {
+                    const double sample = data[i];
+                    sumSquares += sample * sample;
+                }
+                sampleCount += windowEnd - windowStart;
             }
-            sampleCount += end - start;
+
+            if (sampleCount <= 0)
+                continue;
+
+            const double rms = std::sqrt (sumSquares / sampleCount);
+            const float t = static_cast<float> (static_cast<double> (windowStart + windowEnd) * 0.5 - start)
+                          / static_cast<float> (end - start);
+            const float existingGainDb = event->getEnvelopeGainDb (t);
+            const float measuredDb = juce::Decibels::gainToDecibels (static_cast<float> (rms), -120.0f)
+                                   + existingGainDb;
+            // Ignore near-silence so breaths and gaps are not boosted into noise.
+            if (rms < juce::Decibels::decibelsToGain (-65.0f))
+            {
+                positions.add (t);
+                correctionsDb.add (0.0f);
+                continue;
+            }
+
+            positions.add (t);
+            correctionsDb.add (juce::jlimit (maxCutDb, maxBoostDb, targetDb - measuredDb));
         }
 
-        if (sampleCount <= 0)
+        if (positions.size() < 2)
             continue;
 
-        const double rms = std::sqrt (sumSquares / sampleCount);
-        if (rms < 1.0e-7)
-            continue;
+        // Three-point smoothing limits rapid gain swings between adjacent windows.
+        juce::Array<float> smoothed;
+        for (int i = 0; i < correctionsDb.size(); ++i)
+        {
+            float sum = correctionsDb[i];
+            int count = 1;
+            if (i > 0) { sum += correctionsDb[i - 1]; ++count; }
+            if (i + 1 < correctionsDb.size()) { sum += correctionsDb[i + 1]; ++count; }
+            smoothed.add (sum / static_cast<float> (count));
+        }
 
-        const float measuredDb = juce::Decibels::gainToDecibels (
-            static_cast<float> (rms), -120.0f);
-        // Compensate for the event's current gain so repeated Level Process
-        // operations converge toward the target instead of accumulating gain.
-        const float effectiveDb = measuredDb + event->gainDb;
-        const float deltaDb = juce::jlimit (-24.0f, 12.0f, targetDb - effectiveDb);
-        event->gainDb = juce::jlimit (-96.0f, 24.0f, event->gainDb + deltaDb);
-        for (auto& point : event->envelope)
-            point.gainDb = juce::jlimit (-120.0f, 24.0f, point.gainDb + deltaDb);
+        juce::Array<VocalEvent::EnvelopePoint> newEnvelope;
+        newEnvelope.add ({ 0.0f, juce::jlimit (-120.0f, 24.0f,
+            event->getEnvelopeGainDb (0.0f) + smoothed.getFirst()) });
+        for (int i = 0; i < positions.size(); ++i)
+        {
+            const float t = positions[i];
+            newEnvelope.add ({ t, juce::jlimit (-120.0f, 24.0f,
+                event->getEnvelopeGainDb (t) + smoothed[i]) });
+        }
+        newEnvelope.add ({ 1.0f, juce::jlimit (-120.0f, 24.0f,
+            event->getEnvelopeGainDb (1.0f) + smoothed.getLast()) });
+
+        std::sort (newEnvelope.begin(), newEnvelope.end(),
+            [] (const VocalEvent::EnvelopePoint& a, const VocalEvent::EnvelopePoint& b)
+            {
+                return a.t < b.t;
+            });
+        event->envelope.clear();
+        for (const auto& point : newEnvelope)
+        {
+            if (! event->envelope.isEmpty()
+                && std::abs (event->envelope.getLast().t - point.t) < 0.001f)
+                event->envelope.getReference (event->envelope.size() - 1).gainDb = point.gainDb;
+            else
+                event->envelope.add (point);
+        }
         ++processed;
     }
 
