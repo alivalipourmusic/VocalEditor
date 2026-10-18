@@ -151,6 +151,9 @@ private:
 
     juce::UndoManager undoManager;
 
+    std::unique_ptr<juce::XmlElement> createStateXml() const;
+    bool restoreStateFromXml (const juce::XmlElement& xml, juce::String& errorMessage);
+
     void applyEventToBuffer (const VocalEvent& e, juce::AudioBuffer<float>& buffer);
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (VocalEditorAudioProcessor)
