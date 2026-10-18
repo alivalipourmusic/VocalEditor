@@ -67,6 +67,7 @@ public:
     void startPlayback();
     void stopPlayback();
     bool isPlaying() const { return currentlyPlaying; }
+    float getOutputPeak() const { return outputPeak.load (std::memory_order_relaxed); }
     void setComparisonMode (bool enabled);
     bool isComparisonMode() const { return comparisonMode; }
 
@@ -176,6 +177,7 @@ private:
     bool comparisonMode = false;
     bool processingBypassed = false;
     std::atomic<int> readingProcessedBuffer { -1 };
+    std::atomic<float> outputPeak { 0.0f };
 
     juce::File currentAudioFile;
     juce::File currentProjectFile;
