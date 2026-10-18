@@ -866,29 +866,54 @@ void VocalEditorAudioProcessor::deleteEvent (const juce::Uuid& id)
     updateProcessedBuffer();
 }
 
-void VocalEditorAudioProcessor::loadAudioFile (const juce::File& file)
+bool VocalEditorAudioProcessor::loadAudioFile (const juce::File& file, juce::String* errorMessage)
 {
-    clearAudio();
-    
-    std::unique_ptr<juce::AudioFormatReader> reader (formatManager.createReaderFor (file));
-    
-    if (reader != nullptr)
+    auto fail = [errorMessage] (const juce::String& message)
     {
-        const int numSamples = static_cast<int> (reader->lengthInSamples);
-        const int numChannels = static_cast<int> (reader->numChannels);
-        
-        audioBuffer.setSize (numChannels, numSamples);
-        reader->read (&audioBuffer, 0, numSamples, 0, true, true);
+        if (errorMessage != nullptr)
+            *errorMessage = message;
+        return false;
+    };
 
-        currentAudioFile = file;
-        currentSampleRate = reader->sampleRate;
-        playbackPosition = 0.0;
-        playbackSamplePosition = 0;
-        currentlyPlaying = false;
+    if (! file.existsAsFile())
+        return fail ("The selected audio file does not exist.");
 
-        clearSelection();
-        updateProcessedBuffer();
-    }
+    std::unique_ptr<juce::AudioFormatReader> reader (formatManager.createReaderFor (file));
+    if (reader == nullptr)
+        return fail ("The selected file is not a supported audio format.");
+
+    if (reader->lengthInSamples <= 0
+        || reader->lengthInSamples > static_cast<juce::int64> (std::numeric_limits<int>::max())
+        || reader->numChannels <= 0 || reader->numChannels > 64
+        || ! std::isfinite (reader->sampleRate) || reader->sampleRate <= 0.0)
+        return fail ("The selected audio file has invalid duration, channel count, or sample rate.");
+
+    juce::AudioBuffer<float> stagedAudio;
+    stagedAudio.setSize (static_cast<int> (reader->numChannels),
+                         static_cast<int> (reader->lengthInSamples));
+
+    if (! reader->read (&stagedAudio, 0, stagedAudio.getNumSamples(), 0, true, true))
+        return fail ("The selected audio file could not be read completely.");
+
+    // Commit only after opening, validation, allocation, and decoding succeed.
+    stopPlayback();
+    audioBuffer = std::move (stagedAudio);
+    currentAudioFile = file;
+    currentSampleRate = reader->sampleRate;
+    playbackPosition = 0.0;
+    playbackSamplePosition = 0;
+
+    clearSelection();
+    eventList.clear();
+    selectedEvent = nullptr;
+    selectedEventIds.clear();
+    undoManager.clearUndoHistory();
+    currentProjectFile = {};
+    updateProcessedBuffer();
+
+    if (errorMessage != nullptr)
+        errorMessage->clear();
+    return true;
 }
 
 void VocalEditorAudioProcessor::clearAudio()
