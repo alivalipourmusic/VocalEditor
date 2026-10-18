@@ -31,6 +31,9 @@ public:
 private:
     void timerCallback() override;
     void openButtonClicked();
+    void openProjectButtonClicked();
+    void saveProjectButtonClicked();
+    void saveProjectToFile (const juce::File& file);
     void playButtonClicked();
     void stopButtonClicked();
     void zoomInClicked();
@@ -46,7 +49,9 @@ private:
     VocalEditorAudioProcessor& processor;
 
     // Transport / file
-    juce::TextButton openButton  { "Open" };
+    juce::TextButton openButton  { "Open Audio" };
+    juce::TextButton openProjectButton { "Open Project" };
+    juce::TextButton saveProjectButton { "Save Project" };
     juce::TextButton playButton  { "Play" };
     juce::TextButton stopButton  { "Stop" };
     juce::TextButton zoomInButton  { "+" };
