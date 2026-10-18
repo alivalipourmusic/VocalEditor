@@ -411,7 +411,7 @@ bool VocalEditorAudioProcessor::restoreStateFromXml (const juce::XmlElement& xml
         if (reader == nullptr || reader->lengthInSamples <= 0
             || reader->lengthInSamples > static_cast<juce::int64> (std::numeric_limits<int>::max())
             || reader->numChannels <= 0 || reader->numChannels > 64
-            || ! std::isfinite (reader->sampleRate) || reader->sampleRate <= 0.0)
+            || ! VocalAudioMath::isSupportedSampleRate (reader->sampleRate))
         {
             errorMessage = "The source audio file is invalid or unsupported.";
             return false;
@@ -1431,7 +1431,7 @@ bool VocalEditorAudioProcessor::loadAudioFile (const juce::File& file, juce::Str
     if (reader->lengthInSamples <= 0
         || reader->lengthInSamples > static_cast<juce::int64> (std::numeric_limits<int>::max())
         || reader->numChannels <= 0 || reader->numChannels > 64
-        || ! std::isfinite (reader->sampleRate) || reader->sampleRate <= 0.0)
+        || ! VocalAudioMath::isSupportedSampleRate (reader->sampleRate))
         return fail ("The selected audio file has invalid duration, channel count, or sample rate.");
 
     if (! VocalAudioMath::isReasonableAudioAllocation (static_cast<int> (reader->numChannels),
@@ -1505,10 +1505,18 @@ void VocalEditorAudioProcessor::clearAudio()
 
 void VocalEditorAudioProcessor::setPlaybackPosition (double positionInSeconds)
 {
-    playbackPosition = juce::jlimit (0.0, 
-                                     hasAudio() ? static_cast<double> (audioBuffer.getNumSamples()) / currentSampleRate : 0.0,
-                                     positionInSeconds);
-    playbackSamplePosition = static_cast<int> (playbackPosition * currentSampleRate);
+    if (! std::isfinite (positionInSeconds))
+        positionInSeconds = 0.0;
+
+    const double rate = currentSampleRate.load (std::memory_order_acquire);
+    const int samples = audioBuffer.getNumSamples();
+    const double duration = hasAudio() && rate > 0.0
+        ? static_cast<double> (samples) / rate : 0.0;
+    playbackPosition.store (juce::jlimit (0.0, duration, positionInSeconds),
+                            std::memory_order_release);
+    playbackSamplePosition.store (VocalAudioMath::timeToSampleIndex (
+        playbackPosition.load (std::memory_order_acquire), rate, samples),
+        std::memory_order_release);
 }
 
 void VocalEditorAudioProcessor::startPlayback()
