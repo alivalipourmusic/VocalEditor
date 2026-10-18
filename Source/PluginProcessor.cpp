@@ -1195,7 +1195,7 @@ void VocalEditorAudioProcessor::setEventGain (const juce::Uuid& id, float gainDb
 {
     if (auto* event = eventList.getById (id))
     {
-        if (event->locked)
+        if (event->locked || ! std::isfinite (gainDb))
             return;
         const auto before = captureEventState();
         const float newGainDb = juce::jlimit (-96.0f, 24.0f, gainDb);
@@ -1216,7 +1216,7 @@ void VocalEditorAudioProcessor::setEventFades (const juce::Uuid& id, double fade
 {
     if (auto* event = eventList.getById (id))
     {
-        if (event->locked)
+        if (event->locked || ! std::isfinite (fadeInMs) || ! std::isfinite (fadeOutMs))
             return;
         const auto before = captureEventState();
         const double maxFadeMs = event->getLength() * 500.0;
@@ -1238,16 +1238,16 @@ void VocalEditorAudioProcessor::setSelectedEvent (VocalEvent* event)
 void VocalEditorAudioProcessor::splitEvent (const juce::Uuid& id, double splitTime)
 {
     auto* event = eventList.getById (id);
-    if (event == nullptr || event->locked)
+    if (event == nullptr || event->locked || ! std::isfinite (splitTime))
         return;
 
-    const auto before = captureEventState();
     const double split = juce::jlimit (event->startTime, event->endTime, splitTime);
     const double originalStart = event->startTime;
     const double originalEnd = event->endTime;
     if (split - originalStart < 0.005 || originalEnd - split < 0.005)
         return;
 
+    const auto before = captureEventState();
     const double originalFadeOut = event->fadeOutMs;
     const auto originalType = event->type;
     const auto originalFadeInCurve = event->fadeInCurve;
