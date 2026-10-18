@@ -112,7 +112,6 @@ void WaveformComponent::drawFadeHandles (juce::Graphics& g, const VocalEvent& ev
         fade.startNewSubPath (xStart, yBottom);
         fade.lineTo (xFadeIn, yTop);
         g.strokePath (fade, juce::PathStrokeType (isSelected ? 2.0f : 1.0f));
-        g.fillEllipse (xFadeIn - 3.0f, yTop - 1.0f, 6.0f, 6.0f);
     }
     if (event.fadeOutMs > 0.0)
     {
@@ -120,7 +119,21 @@ void WaveformComponent::drawFadeHandles (juce::Graphics& g, const VocalEvent& ev
         fade.startNewSubPath (xFadeOut, yTop);
         fade.lineTo (xEnd, yBottom);
         g.strokePath (fade, juce::PathStrokeType (isSelected ? 2.0f : 1.0f));
-        g.fillEllipse (xFadeOut - 3.0f, yTop - 1.0f, 6.0f, 6.0f);
+    }
+
+    // Always show the handles on the selected event so zero-length fades can
+    // be created directly on the waveform as well as adjusted.
+    if (isSelected)
+    {
+        g.fillEllipse (xFadeIn - 4.0f, yTop - 1.0f, 8.0f, 8.0f);
+        g.fillEllipse (xFadeOut - 4.0f, yTop - 1.0f, 8.0f, 8.0f);
+    }
+    else
+    {
+        if (event.fadeInMs > 0.0)
+            g.fillEllipse (xFadeIn - 3.0f, yTop - 1.0f, 6.0f, 6.0f);
+        if (event.fadeOutMs > 0.0)
+            g.fillEllipse (xFadeOut - 3.0f, yTop - 1.0f, 6.0f, 6.0f);
     }
 }
 
@@ -191,6 +204,35 @@ void WaveformComponent::drawGrid (juce::Graphics& g)
     }
 }
 
+WaveformComponent::DragMode WaveformComponent::hitTestFadeHandle (float x, VocalEvent*& outEvent) const
+{
+    outEvent = nullptr;
+    const auto& events = processor.getEventList().getAll();
+
+    // Reverse order mirrors paint order so the top-most event wins overlaps.
+    for (int i = events.size(); --i >= 0;)
+    {
+        auto* event = events[i];
+        if (event == nullptr || event->endTime < visibleStartTime || event->startTime > visibleEndTime)
+            continue;
+
+        const float inX = static_cast<float> (timeToX (event->startTime + event->fadeInMs / 1000.0));
+        const float outX = static_cast<float> (timeToX (event->endTime - event->fadeOutMs / 1000.0));
+
+        if (std::abs (x - inX) <= handleHitRadius)
+        {
+            outEvent = event;
+            return DragMode::FadeIn;
+        }
+        if (std::abs (x - outX) <= handleHitRadius)
+        {
+            outEvent = event;
+            return DragMode::FadeOut;
+        }
+    }
+    return DragMode::None;
+}
+
 //==============================================================================
 double WaveformComponent::timeToX (double time) const
 {
@@ -213,12 +255,48 @@ void WaveformComponent::mouseDown (const juce::MouseEvent& e)
 {
     if (! processor.hasAudio())
         return;
-    
-    const double time = xToTime (static_cast<float> (e.x));
-    
+
+    const double time = juce::jlimit (0.0, totalDuration, xToTime (static_cast<float> (e.x)));
+
+    // Fade handles take priority over event selection and range selection.
+    VocalEvent* fadeEvent = nullptr;
+    const auto fadeMode = hitTestFadeHandle (static_cast<float> (e.x), fadeEvent);
+    if (fadeEvent != nullptr && fadeMode != DragMode::None)
+    {
+        processor.setSelectedEvent (fadeEvent);
+        dragMode = fadeMode;
+        fadeDragEventId = fadeEvent->id;
+        fadeDragStartMs = (fadeMode == DragMode::FadeIn ? fadeEvent->fadeInMs : fadeEvent->fadeOutMs);
+        selectionStartTime = time;
+        isSelecting = false;
+        processor.setPlaybackPosition (time);
+        repaint();
+        return;
+    }
+
+    // Clicking inside an existing event selects it instead of creating a tiny range.
+    if (! e.mods.isShiftDown())
+    {
+        const auto& events = processor.getEventList().getAll();
+        for (int i = events.size(); --i >= 0;)
+        {
+            auto* event = events[i];
+            if (event != nullptr && event->contains (time))
+            {
+                processor.setSelectedEvent (event);
+                processor.setPlaybackPosition (time);
+                processor.clearSelection();
+                dragMode = DragMode::None;
+                isSelecting = false;
+                repaint();
+                return;
+            }
+        }
+    }
+
+    dragMode = DragMode::Selecting;
     if (e.mods.isShiftDown())
     {
-        // Extend selection
         const auto& sel = processor.getSelection();
         if (sel.isActive)
         {
@@ -231,30 +309,48 @@ void WaveformComponent::mouseDown (const juce::MouseEvent& e)
         {
             processor.setSelection (time, time);
         }
+        isSelecting = false;
     }
     else
     {
-        // Start new selection or move playhead
         isSelecting = true;
         selectionStartTime = time;
         processor.setSelection (time, time);
-        
-        // Also set playhead
         processor.setPlaybackPosition (time);
     }
-    
+
     repaint();
 }
 
 void WaveformComponent::mouseDrag (const juce::MouseEvent& e)
 {
-    if (! processor.hasAudio() || ! isSelecting)
+    if (! processor.hasAudio())
         return;
-    
+
     const double time = juce::jlimit (0.0, totalDuration, xToTime (static_cast<float> (e.x)));
+
+    if (dragMode == DragMode::FadeIn || dragMode == DragMode::FadeOut)
+    {
+        if (auto* event = processor.getEventList().getById (fadeDragEventId))
+        {
+            const double deltaMs = (time - selectionStartTime) * 1000.0;
+            const double maxFadeMs = event->getLength() * 500.0;
+            const double newFade = juce::jlimit (0.0, maxFadeMs,
+                fadeDragStartMs + (dragMode == DragMode::FadeIn ? deltaMs : -deltaMs));
+            if (dragMode == DragMode::FadeIn)
+                processor.setEventFades (event->id, newFade, event->fadeOutMs);
+            else
+                processor.setEventFades (event->id, event->fadeInMs, newFade);
+            repaint();
+        }
+        return;
+    }
+
+    if (! isSelecting)
+        return;
+
     processor.setSelection (selectionStartTime, time);
-    
-    // Auto-scroll if dragging near edges
+
     const float edge = 40.0f;
     if (e.x < edge)
     {
@@ -268,29 +364,42 @@ void WaveformComponent::mouseDrag (const juce::MouseEvent& e)
         visibleStartTime = visibleEndTime - getVisibleDuration();
         updateVisibleRange();
     }
-    
+
     repaint();
 }
 
 void WaveformComponent::mouseMove (const juce::MouseEvent& e)
 {
-    juce::ignoreUnused (e);
-    // Hover feedback can be added once fade-handle hit testing is implemented.
+    VocalEvent* event = nullptr;
+    const auto mode = hitTestFadeHandle (static_cast<float> (e.x), event);
+    if (mode == DragMode::FadeIn || mode == DragMode::FadeOut)
+        setMouseCursor (juce::MouseCursor::LeftRightResizeCursor);
+    else
+    {
+        const double time = xToTime (static_cast<float> (e.x));
+        bool overEvent = false;
+        for (const auto* item : processor.getEventList().getAll())
+            if (item != nullptr && item->contains (time))
+            {
+                overEvent = true;
+                break;
+            }
+        setMouseCursor (overEvent ? juce::MouseCursor::PointingHandCursor
+                                  : juce::MouseCursor::NormalCursor);
+    }
 }
 
 void WaveformComponent::mouseUp (const juce::MouseEvent& e)
 {
     juce::ignoreUnused (e);
     isSelecting = false;
-    
-    // Ensure selection has minimum length
+    dragMode = DragMode::None;
+    fadeDragEventId = juce::Uuid::null();
+
     auto& sel = processor.getSelection();
-    if (sel.isActive && sel.getLength() < 0.005) // 5ms minimum
-    {
-        // Treat as click - just place playhead
+    if (sel.isActive && sel.getLength() < 0.005)
         processor.clearSelection();
-    }
-    
+
     repaint();
 }
 
