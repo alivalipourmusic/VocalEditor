@@ -21,6 +21,7 @@ MainComponent::MainComponent (VocalEditorAudioProcessor& p)
     openButton.onClick = [this] { openButtonClicked(); };
     openProjectButton.onClick = [this] { openProjectButtonClicked(); };
     saveProjectButton.onClick = [this] { saveProjectButtonClicked(); };
+    exportAudioButton.onClick = [this] { exportAudioButtonClicked(); };
     playButton.onClick = [this] { playButtonClicked(); };
     stopButton.onClick = [this] { stopButtonClicked(); };
     zoomInButton.onClick = [this] { zoomInClicked(); };
@@ -92,7 +93,7 @@ MainComponent::MainComponent (VocalEditorAudioProcessor& p)
     analysisLabel.setColour (juce::Label::textColourId, juce::Colour (0xff94a3b8));
     addAndMakeVisible (analysisLabel);
 
-    for (auto* btn : { &autoSegmentButton, &levelProcessButton })
+    for (auto* btn : { &autoSegmentButton, &levelProcessButton, &exportAudioButton })
     {
         btn->setColour (juce::TextButton::buttonColourId, panelColour);
         btn->setColour (juce::TextButton::textColourOffId, textColour);
@@ -174,6 +175,7 @@ void MainComponent::resized()
     analysisLabel.setBounds (analysisBar.removeFromLeft (190));
     autoSegmentButton.setBounds (analysisBar.removeFromLeft (112).reduced (2, 5));
     levelProcessButton.setBounds (analysisBar.removeFromLeft (112).reduced (2, 5));
+    exportAudioButton.setBounds (analysisBar.removeFromLeft (100).reduced (2, 5));
     analysisBar.removeFromLeft (4);
     thresholdSlider.setBounds (analysisBar.removeFromLeft (112).reduced (1, 5));
     silenceSlider.setBounds (analysisBar.removeFromLeft (112).reduced (1, 5));
@@ -342,6 +344,35 @@ void MainComponent::saveProjectToFile (const juce::File& file)
         statusLabel.setText ("Project saved: " + file.getFileName(), juce::dontSendNotification);
     else
         statusLabel.setText ("Could not save project file.", juce::dontSendNotification);
+}
+
+void MainComponent::exportAudioButtonClicked()
+{
+    auto chooser = std::make_shared<juce::FileChooser> (
+        "Export processed vocal audio...",
+        juce::File::getSpecialLocation (juce::File::userDocumentsDirectory)
+            .getChildFile ("Processed Vocal.wav"),
+        "*.wav;*.aif;*.aiff");
+
+    chooser->launchAsync (juce::FileBrowserComponent::saveMode
+                              | juce::FileBrowserComponent::canSelectFiles
+                              | juce::FileBrowserComponent::warnAboutOverwriting,
+                          [this, chooser] (const juce::FileChooser& fc)
+    {
+        auto file = fc.getResult();
+        if (file == juce::File())
+            return;
+
+        if (! file.hasFileExtension ("wav") && ! file.hasFileExtension ("aif")
+            && ! file.hasFileExtension ("aiff"))
+            file = file.withFileExtension ("wav");
+
+        juce::String error;
+        if (processor.exportProcessedAudio (file, error))
+            statusLabel.setText ("Exported processed audio: " + file.getFileName(), juce::dontSendNotification);
+        else
+            statusLabel.setText ("Export failed: " + error, juce::dontSendNotification);
+    });
 }
 
 void MainComponent::playButtonClicked()
