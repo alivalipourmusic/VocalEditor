@@ -459,7 +459,10 @@ bool VocalEditorAudioProcessor::restoreStateFromXml (const juce::XmlElement& xml
     }
 
     // Commit only after the XML, source audio, and complete event timeline
-    // have passed validation.
+    // have passed validation. Stop transport and mark the render stale before
+    // replacing session data so the callback cannot play the prior snapshot.
+    stopPlayback();
+    processedBufferUpdatePending.store (true, std::memory_order_release);
     audioBuffer = std::move (stagedAudio);
     audioAvailable.store (audioBuffer.getNumSamples() > 0, std::memory_order_release);
     currentAudioFile = stagedAudioFile;
@@ -1440,6 +1443,7 @@ bool VocalEditorAudioProcessor::loadAudioFile (const juce::File& file, juce::Str
 
     // Commit only after opening, validation, allocation, and decoding succeed.
     stopPlayback();
+    processedBufferUpdatePending.store (true, std::memory_order_release);
     audioBuffer = std::move (stagedAudio);
     audioAvailable.store (audioBuffer.getNumSamples() > 0, std::memory_order_release);
     currentAudioFile = file;
@@ -1467,6 +1471,7 @@ void VocalEditorAudioProcessor::clearAudio()
     // empty timeline and fail, leaving a misleading stale history stack.
     stopPlayback();
     undoManager.clearUndoHistory();
+    processedBufferUpdatePending.store (true, std::memory_order_release);
 
     audioAvailable.store (false, std::memory_order_release);
     audioBuffer.setSize (0, 0);
