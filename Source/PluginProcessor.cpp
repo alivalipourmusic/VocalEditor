@@ -584,6 +584,77 @@ void VocalEditorAudioProcessor::updateProcessedBuffer()
     activeProcessedBuffer.store (targetIndex, std::memory_order_release);
 }
 
+bool VocalEditorAudioProcessor::exportProcessedAudio (const juce::File& file, juce::String& errorMessage)
+{
+    auto fail = [&errorMessage] (const juce::String& message)
+    {
+        errorMessage = message;
+        return false;
+    };
+
+    if (! hasAudio() || currentSampleRate <= 0.0)
+        return fail ("Load an audio file before exporting.");
+
+    if (file == juce::File() || file.isDirectory())
+        return fail ("Choose a valid output file.");
+
+    if (file == currentAudioFile)
+        return fail ("Export to a new file; the source audio cannot be overwritten.");
+
+    const auto extension = file.getFileExtension().toLowerCase();
+    if (extension != ".wav" && extension != ".aif" && extension != ".aiff")
+        return fail ("Export currently supports WAV and AIFF files.");
+
+    // Acquire an immutable processed snapshot without blocking the audio callback.
+    int sourceIndex = 0;
+    for (;;)
+    {
+        sourceIndex = activeProcessedBuffer.load (std::memory_order_acquire);
+        processedBufferReaders[static_cast<size_t> (sourceIndex)].fetch_add (1, std::memory_order_acq_rel);
+        if (sourceIndex == activeProcessedBuffer.load (std::memory_order_acquire))
+            break;
+
+        processedBufferReaders[static_cast<size_t> (sourceIndex)].fetch_sub (1, std::memory_order_release);
+    }
+
+    juce::AudioBuffer<float> snapshot;
+    const auto& source = processedBuffers[static_cast<size_t> (sourceIndex)];
+    const bool sourceValid = source.getNumSamples() > 0 && source.getNumChannels() > 0;
+    if (sourceValid)
+        snapshot.makeCopyOf (source, true);
+    processedBufferReaders[static_cast<size_t> (sourceIndex)].fetch_sub (1, std::memory_order_release);
+
+    if (! sourceValid || snapshot.getNumSamples() <= 0)
+        return fail ("There is no processed audio available to export.");
+
+    auto* format = formatManager.findFormatForFileExtension (extension);
+    if (format == nullptr)
+        return fail ("No writer is available for this audio format.");
+
+    auto outputStream = file.createOutputStream();
+    if (outputStream == nullptr || ! outputStream->openedOk())
+        return fail ("Could not create the output file. Check the folder and file permissions.");
+
+    if (! outputStream->setPosition (0) || ! outputStream->truncate())
+        return fail ("Could not prepare the output file for writing.");
+
+    const int bitsPerSample = extension == ".wav" ? 24 : 24;
+    auto writer = std::unique_ptr<juce::AudioFormatWriter> (
+        format->createWriterFor (std::move (outputStream),
+                                 currentSampleRate.load (std::memory_order_acquire),
+                                 static_cast<unsigned int> (snapshot.getNumChannels()),
+                                 bitsPerSample, {}, 0));
+    if (writer == nullptr)
+        return fail ("Could not create an audio writer for the selected format.");
+
+    if (! writer->writeFromAudioSampleBuffer (snapshot, 0, snapshot.getNumSamples()))
+        return fail ("Audio export failed while writing samples.");
+
+    writer.reset();
+    errorMessage.clear();
+    return true;
+}
+
 int VocalEditorAudioProcessor::autoSegmentFromSilence (const SegmentParams& params)
 {
     if (! hasAudio() || currentSampleRate <= 0.0)
