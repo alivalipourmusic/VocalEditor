@@ -165,6 +165,20 @@ MainComponent::MainComponent (VocalEditorAudioProcessor& p)
     for (auto* slider : { &noiseReductionThresholdSlider, &noiseReductionAmountSlider, &noiseReductionReleaseSlider })
         slider->onValueChange = [this] { noiseReductionChanged(); };
 
+    roomTailReductionToggle.setColour (juce::ToggleButton::textColourId, textColour);
+    roomTailReductionToggle.setToggleState (processor.isRoomTailReductionEnabled(), juce::dontSendNotification);
+    roomTailReductionToggle.onClick = [this] { processor.setRoomTailReductionEnabled (roomTailReductionToggle.getToggleState()); };
+    roomTailReductionToggle.setTooltip ("Conservatively attenuate low-level tails after louder vocal material; not full de-reverberation.");
+    addAndMakeVisible (roomTailReductionToggle);
+    setupDeEsserSlider (roomTailThresholdSlider, -60.0, -12.0, 1.0, " dB", processor.getRoomTailThreshold());
+    setupDeEsserSlider (roomTailReductionSlider, 0.0, 24.0, 1.0, " dB", processor.getRoomTailMaxReduction());
+    setupDeEsserSlider (roomTailSensitivitySlider, 0.1, 1.0, 0.05, "", processor.getRoomTailSensitivity());
+    roomTailThresholdSlider.setTooltip ("Tail detection threshold");
+    roomTailReductionSlider.setTooltip ("Maximum tail attenuation");
+    roomTailSensitivitySlider.setTooltip ("Tail sensitivity; higher values affect more of the decay");
+    for (auto* slider : { &roomTailThresholdSlider, &roomTailReductionSlider, &roomTailSensitivitySlider })
+        slider->onValueChange = [this] { roomTailReductionChanged(); };
+
     addAndMakeVisible (timeline);
     addAndMakeVisible (waveform);
     addAndMakeVisible (eventPanel);
@@ -252,6 +266,13 @@ void MainComponent::resized()
     noiseReductionThresholdSlider.setBounds (noiseReductionBar.removeFromLeft (220).reduced (2, 3));
     noiseReductionAmountSlider.setBounds (noiseReductionBar.removeFromLeft (220).reduced (2, 3));
     noiseReductionReleaseSlider.setBounds (noiseReductionBar.removeFromLeft (220).reduced (2, 3));
+
+    auto roomTailBar = bounds.removeFromTop (38);
+    roomTailBar.reduce (8, 1);
+    roomTailReductionToggle.setBounds (roomTailBar.removeFromLeft (130).reduced (1, 3));
+    roomTailThresholdSlider.setBounds (roomTailBar.removeFromLeft (220).reduced (2, 3));
+    roomTailReductionSlider.setBounds (roomTailBar.removeFromLeft (220).reduced (2, 3));
+    roomTailSensitivitySlider.setBounds (roomTailBar.removeFromLeft (220).reduced (2, 3));
 
     // Status bar
     auto statusBar = bounds.removeFromBottom (28);
@@ -444,6 +465,14 @@ void MainComponent::noiseReductionChanged()
         static_cast<float> (noiseReductionReleaseSlider.getValue()));
 }
 
+void MainComponent::roomTailReductionChanged()
+{
+    processor.setRoomTailReductionParameters (
+        static_cast<float> (roomTailThresholdSlider.getValue()),
+        static_cast<float> (roomTailReductionSlider.getValue()),
+        static_cast<float> (roomTailSensitivitySlider.getValue()));
+}
+
 void MainComponent::levelProcessClicked()
 {
     const int count = processor.levelEventsToTarget (
@@ -565,6 +594,17 @@ void MainComponent::timerCallback()
     if (! noiseReductionReleaseSlider.isMouseButtonDown()
         && std::abs (noiseReductionReleaseSlider.getValue() - processor.getNoiseReductionRelease()) > 0.1)
         noiseReductionReleaseSlider.setValue (processor.getNoiseReductionRelease(), juce::dontSendNotification);
+    if (! roomTailReductionToggle.isMouseButtonDown())
+        roomTailReductionToggle.setToggleState (processor.isRoomTailReductionEnabled(), juce::dontSendNotification);
+    if (! roomTailThresholdSlider.isMouseButtonDown()
+        && std::abs (roomTailThresholdSlider.getValue() - processor.getRoomTailThreshold()) > 0.1)
+        roomTailThresholdSlider.setValue (processor.getRoomTailThreshold(), juce::dontSendNotification);
+    if (! roomTailReductionSlider.isMouseButtonDown()
+        && std::abs (roomTailReductionSlider.getValue() - processor.getRoomTailMaxReduction()) > 0.1)
+        roomTailReductionSlider.setValue (processor.getRoomTailMaxReduction(), juce::dontSendNotification);
+    if (! roomTailSensitivitySlider.isMouseButtonDown()
+        && std::abs (roomTailSensitivitySlider.getValue() - processor.getRoomTailSensitivity()) > 0.01)
+        roomTailSensitivitySlider.setValue (processor.getRoomTailSensitivity(), juce::dontSendNotification);
 
     // Update play button text
     playButton.setButtonText (processor.isPlaying() ? "Pause" : "Play");
