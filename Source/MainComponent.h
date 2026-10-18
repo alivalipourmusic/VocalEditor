@@ -44,6 +44,7 @@ private:
     void levelProcessClicked();
     void deEsserChanged();
     void dePlosiveChanged();
+    void noiseReductionChanged();
 
     VocalEditorAudioProcessor& processor;
 
@@ -73,6 +74,10 @@ private:
     juce::Slider dePlosiveCutoffSlider;
     juce::Slider dePlosiveThresholdSlider;
     juce::Slider dePlosiveReductionSlider;
+    juce::ToggleButton noiseReductionToggle { "Noise Reduction" };
+    juce::Slider noiseReductionThresholdSlider;
+    juce::Slider noiseReductionAmountSlider;
+    juce::Slider noiseReductionReleaseSlider;
     juce::ToggleButton selectedOnlyToggle { "Selected only" };
     juce::ComboBox segmentTypeCombo;
     juce::Label analysisLabel;
