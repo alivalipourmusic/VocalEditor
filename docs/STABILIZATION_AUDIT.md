@@ -236,3 +236,11 @@ ctest --test-dir build -C Release --output-on-failure
 - [x] Add regression tests for ordinary conversion, negative values, huge finite values, invalid rates, empty buffers, and round-up behavior.
 - [x] Save project XML to a temporary file and replace the target only after serialization succeeds, reducing the chance of destroying an existing project on interrupted/failed writes.
 - [ ] Windows build and CTest must pass before these changes are considered runtime-verified.
+
+
+## Phase 17 progress: consistent sample indexing and split continuity
+
+- [x] Use the bounded timeline-to-sample helper for playback position updates and remove redundant unsafe casts from Level Process.
+- [x] Add regression coverage that checks split envelope slices preserve source automation at the split boundary and across a dense set of points on both sides.
+- [ ] Run Windows CI to completion. Several rapid commits caused older CI runs to be cancelled by the concurrency policy; the latest commit's run must be checked after the batch is complete.
+- [ ] Runtime-test split/merge, undo/redo, and playback while editing on Windows/Cubase before marking them verified.
