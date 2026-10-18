@@ -151,6 +151,45 @@ namespace
                "rendered fade-out ends at silence");
     }
 
+    void testMergeEnvelopeBoundaryCompatibility()
+    {
+        VocalEvent left;
+        VocalEvent right;
+        left.gainDb = -3.0f;
+        right.gainDb = -3.0f;
+        check (VocalAudioMath::canJoinEnvelopeAtBoundary (left, right),
+               "flat events with matching gains can join");
+
+        right.gainDb = -9.0f;
+        check (! VocalAudioMath::canJoinEnvelopeAtBoundary (left, right),
+               "flat events with a gain discontinuity cannot join");
+
+        left.envelope.add ({ 0.0f, -12.0f });
+        left.envelope.add ({ 0.5f, -6.0f });
+        left.envelope.add ({ 1.0f, -2.0f });
+        right.envelope.add ({ 0.0f, -2.0f });
+        right.envelope.add ({ 1.0f, -8.0f });
+        check (VocalAudioMath::canJoinEnvelopeAtBoundary (left, right),
+               "custom envelopes with matching boundary gains can join");
+        right.envelope.getReference (0).gainDb = -4.0f;
+        check (! VocalAudioMath::canJoinEnvelopeAtBoundary (left, right),
+               "custom envelopes with mismatched boundary gains cannot join");
+
+        VocalEvent sparse;
+        sparse.gainDb = 0.0f;
+        sparse.envelope.add ({ 0.25f, -8.0f });
+        sparse.envelope.add ({ 0.75f, -4.0f });
+        const auto normalised = sparse.makeEnvelopeSlice (0.0f, 1.0f);
+        check (normalised.size() == 4,
+               "normalised envelope slice adds interpolated endpoints around sparse points");
+        if (normalised.size() == 4)
+        {
+            check (near (normalised.getFirst().t, 0.0f)
+                   && near (normalised.getLast().t, 1.0f),
+                   "normalised envelope slice spans the complete event");
+        }
+    }
+
     void testIntervalOverlapRules()
     {
         check (VocalAudioMath::intervalsOverlap (0.0, 1.0, 0.5, 1.5),
@@ -227,6 +266,7 @@ int main()
     testLinearInterpolation();
     testFadeEndpointsAndShortEvents();
     testIntervalOverlapRules();
+    testMergeEnvelopeBoundaryCompatibility();
     testSignalLevelGainAndFadeRendering();
 
     if (failures == 0)
