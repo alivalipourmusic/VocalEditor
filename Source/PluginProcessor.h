@@ -138,7 +138,10 @@ private:
     juce::File currentAudioFile;
     juce::File currentProjectFile;
 
+    // Native rate of the imported source file; timeline/event times use this rate.
     std::atomic<double> currentSampleRate { 44100.0 };
+    // Rate requested by the host/device; output playback resamples source audio to this rate.
+    std::atomic<double> hostOutputSampleRate { 44100.0 };
     std::atomic<bool> audioAvailable { false };
 
     std::atomic<double> playbackPosition { 0.0 };
