@@ -157,6 +157,7 @@ private:
     juce::XmlElement captureEventState() const;
     bool restoreEventState (const juce::XmlElement& xml);
     void recordEventUndo (const juce::XmlElement& before, const juce::String& actionName, int coalesceMs = 0);
+    class EventStateAction;
 
     void applyEventToBuffer (const VocalEvent& e, juce::AudioBuffer<float>& buffer);
 
