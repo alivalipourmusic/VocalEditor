@@ -39,7 +39,7 @@ public:
     void getStateInformation (juce::MemoryBlock& destData) override;
     void setStateInformation (const void* data, int sizeInBytes) override;
 
-    void loadAudioFile (const juce::File& file);
+    bool loadAudioFile (const juce::File& file, juce::String* errorMessage = nullptr);
     void clearAudio();
     bool hasAudio() const { return audioBuffer.getNumSamples() > 0; }
     juce::File getCurrentAudioFile() const { return currentAudioFile; }
