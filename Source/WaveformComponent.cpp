@@ -372,3 +372,8 @@ void WaveformComponent::timerCallback()
     if (processor.isPlaying())
         repaint();
 }
+
+void WaveformComponent::mouseMove (const juce::MouseEvent& e)
+{
+    juce::ignoreUnused (e);
+}
