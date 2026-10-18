@@ -252,8 +252,9 @@ namespace VocalAudioMath
         int fadeOut = millisecondsToSamplesClamped (event.fadeOutMs, sampleRate, length);
         fitFadesToEvent (length, fadeIn, fadeOut);
 
-        const int transitionIn = millisecondsToSamplesClamped (event.gainTransitionInMs, sampleRate, length);
-        const int transitionOut = millisecondsToSamplesClamped (event.gainTransitionOutMs, sampleRate, length);
+        int transitionIn = millisecondsToSamplesClamped (event.gainTransitionInMs, sampleRate, length);
+        int transitionOut = millisecondsToSamplesClamped (event.gainTransitionOutMs, sampleRate, length);
+        fitFadesToEvent (length, transitionIn, transitionOut);
         double sumSquares = 0.0;
         const auto channels = source.getNumChannels();
         for (int i = 0; i < length; ++i)
@@ -300,10 +301,11 @@ namespace VocalAudioMath
         int fadeInSamples = millisecondsToSamplesClamped (event.fadeInMs, sampleRate, eventLength);
         int fadeOutSamples = millisecondsToSamplesClamped (event.fadeOutMs, sampleRate, eventLength);
         fitFadesToEvent (eventLength, fadeInSamples, fadeOutSamples);
-        const int transitionInSamples = millisecondsToSamplesClamped (
+        int transitionInSamples = millisecondsToSamplesClamped (
             event.gainTransitionInMs, sampleRate, eventLength);
-        const int transitionOutSamples = millisecondsToSamplesClamped (
+        int transitionOutSamples = millisecondsToSamplesClamped (
             event.gainTransitionOutMs, sampleRate, eventLength);
+        fitFadesToEvent (eventLength, transitionInSamples, transitionOutSamples);
 
         for (int sample = startSample; sample < endSample; ++sample)
         {
