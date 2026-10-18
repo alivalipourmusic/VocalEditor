@@ -34,6 +34,7 @@ juce_generate_juce_header(VocalEditor)
 target_sources(VocalEditor
     PRIVATE
         Source/VocalEvent.h
+        Source/AudioResampling.h
         Source/PluginProcessor.cpp
         Source/PluginProcessor.h
         Source/PluginEditor.cpp
@@ -82,6 +83,7 @@ if (BUILD_TESTING)
         PRIVATE
             Tests/VocalEventTests.cpp
             Source/VocalEvent.h
+            Source/AudioResampling.h
     )
 
     target_include_directories(VocalEditorTests
