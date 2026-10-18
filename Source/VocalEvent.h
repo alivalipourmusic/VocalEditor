@@ -15,6 +15,10 @@ struct VocalEvent
     double endTime   = 0.0;
 
     float gainDb = 0.0f;
+    // Additional word-level gain boost, shaped independently of base gain/envelope.
+    float dynamicGainDb = 0.0f;
+    double gainTransitionInMs = 0.0;
+    double gainTransitionOutMs = 0.0;
 
     double fadeInMs  = 0.0;
     double fadeOutMs = 0.0;
