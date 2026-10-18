@@ -567,7 +567,13 @@ bool VocalEditorAudioProcessor::saveProject (const juce::File& projectFile)
     if (xml == nullptr)
         return false;
 
-    if (! xml->writeTo (projectFile))
+    // Write a complete temporary project first, then replace the destination.
+    // If serialization or disk I/O fails, the previous project file remains intact.
+    juce::TemporaryFile temporary (projectFile);
+    if (! xml->writeTo (temporary.getFile()))
+        return false;
+
+    if (! temporary.overwriteTargetFileWithTemporary())
         return false;
 
     currentProjectFile = projectFile;
