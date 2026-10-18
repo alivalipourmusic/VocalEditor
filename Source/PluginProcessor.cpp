@@ -903,7 +903,8 @@ int VocalEditorAudioProcessor::autoSegmentFromSilence (const SegmentParams& para
 
 int VocalEditorAudioProcessor::levelEventsToTarget (float targetDb, bool selectedOnly)
 {
-    if (! hasAudio() || currentSampleRate <= 0.0 || eventList.isEmpty())
+    if (! hasAudio() || currentSampleRate <= 0.0 || eventList.isEmpty()
+        || ! std::isfinite (targetDb))
         return 0;
 
     targetDb = juce::jlimit (-36.0f, -6.0f, targetDb);
