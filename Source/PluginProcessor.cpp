@@ -1198,9 +1198,7 @@ void VocalEditorAudioProcessor::mergeEvents (const juce::Uuid& idA, const juce::
     // A single merged envelope cannot represent a discontinuity at the join.
     // Refuse that merge instead of creating duplicate-time envelope points
     // which later fail snapshot validation and break Redo.
-    const float leftBoundaryGain = a->getEnvelopeGainDb (1.0f);
-    const float rightBoundaryGain = b->getEnvelopeGainDb (0.0f);
-    if (std::abs (leftBoundaryGain - rightBoundaryGain) > 1.0e-4f)
+    if (! VocalAudioMath::canJoinEnvelopeAtBoundary (*a, *b))
         return;
 
     const auto before = captureEventState();
