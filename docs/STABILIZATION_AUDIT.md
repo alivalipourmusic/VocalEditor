@@ -211,3 +211,11 @@ ctest --test-dir build -C Release --output-on-failure
 - [x] Clamp selection endpoints to the loaded duration and reject non-finite selection times.
 - [x] Remove the duplicate Delete/Backspace shortcut branch and retain a fallback for the currently selected event when the multi-selection list is empty.
 - [ ] Compile and run the Windows build/tests and stress-test load/clear while playback is active; these changes are not runtime-verified here.
+
+
+## Phase 14 progress: level matching uses the rendered signal
+
+- [x] Extract a non-allocating RMS measurement helper that includes the event's current envelope and fade curves.
+- [x] Use rendered RMS for Level Process target matching; custom automation is now measured as heard instead of assuming the base gain field controls it.
+- [x] Add regression coverage for constant event gain, custom envelope gain, and fade attenuation.
+- [ ] Build and run CTest on Windows. The source and tests are committed, but no successful compile/runtime result is claimed until CI or a local build confirms it.
