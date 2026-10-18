@@ -75,6 +75,17 @@ The project currently has no dedicated test target visible in the inspected CMak
 - [ ] Add processor-level integration tests for split/merge/undo using complete event snapshots and rendered audio.
 - [ ] Add sine/noise test signals and frequency-dependent measurements before approving the production resampler.
 
+## Phase 8 progress: split/merge and undo snapshot integrity
+
+- [x] Validate a complete event snapshot, including audio-duration bounds, fade bounds, duplicate IDs, ordered envelope points, and event overlaps, before mutating live state.
+- [x] Fix a Merge/Redo defect: duplicate envelope timestamps at the join could make the merged snapshot invalid during Redo.
+- [x] Normalize source envelopes to explicit [0, 1] endpoints before mapping them into a merged event.
+- [x] Reject merges whose left/right envelope gains disagree at the join, because one continuous envelope cannot represent that discontinuity without changing the shape.
+- [x] Add tests for compatible/incompatible flat and custom envelope joins, and sparse envelope endpoint normalization.
+- [ ] Add processor integration tests that invoke real Split, Merge, Undo and Redo actions and compare complete event snapshots.
+- [ ] Compile and run CTest on Windows; no passing execution is claimed yet.
+- [ ] Confirm restore validation behavior with empty projects and after loading audio of different durations.
+
 ## Status clarification
 
 Earlier sections describe findings from the initial audit snapshot. Since then, state serialization, safer staged import, event snapshot undo actions, processed audio export, and the sample-rate separation above have been added on this branch. The outstanding items in the validation checklist remain unverified until a real build and tests run.
