@@ -1,6 +1,10 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
 
+#include <cmath>
+#include <limits>
+#include <vector>
+
 //==============================================================================
 VocalEditorAudioProcessor::VocalEditorAudioProcessor()
 #ifndef JucePlugin_PreferredChannelConfigurations
@@ -191,15 +195,298 @@ juce::AudioProcessorEditor* VocalEditorAudioProcessor::createEditor()
 }
 
 //==============================================================================
+std::unique_ptr<juce::XmlElement> VocalEditorAudioProcessor::createStateXml() const
+{
+    auto xml = std::make_unique<juce::XmlElement> ("VocalEditorState");
+    xml->setAttribute ("version", 1);
+    xml->setAttribute ("audioPath", currentAudioFile.getFullPathName());
+    xml->setAttribute ("playbackPosition", playbackPosition);
+    xml->setAttribute ("selectionActive", selection.isActive);
+    xml->setAttribute ("selectionStart", selection.startTime);
+    xml->setAttribute ("selectionEnd", selection.endTime);
+
+    auto* events = xml->createNewChildElement ("Events");
+    for (const auto* event : eventList.getAll())
+    {
+        if (event == nullptr)
+            continue;
+
+        auto* item = events->createNewChildElement ("Event");
+        item->setAttribute ("id", event->id.toString());
+        item->setAttribute ("type", static_cast<int> (event->type));
+        item->setAttribute ("start", event->startTime);
+        item->setAttribute ("end", event->endTime);
+        item->setAttribute ("gainDb", event->gainDb);
+        item->setAttribute ("fadeInMs", event->fadeInMs);
+        item->setAttribute ("fadeOutMs", event->fadeOutMs);
+        item->setAttribute ("fadeInCurve", static_cast<int> (event->fadeInCurve));
+        item->setAttribute ("fadeOutCurve", static_cast<int> (event->fadeOutCurve));
+        item->setAttribute ("locked", event->locked);
+
+        auto* envelope = item->createNewChildElement ("Envelope");
+        for (const auto& point : event->envelope)
+        {
+            auto* pointXml = envelope->createNewChildElement ("Point");
+            pointXml->setAttribute ("t", point.t);
+            pointXml->setAttribute ("gainDb", point.gainDb);
+        }
+    }
+
+    auto* selected = xml->createNewChildElement ("SelectedEvents");
+    for (const auto& id : selectedEventIds)
+    {
+        auto* item = selected->createNewChildElement ("Id");
+        item->setAttribute ("value", id.toString());
+    }
+
+    return xml;
+}
+
+bool VocalEditorAudioProcessor::restoreStateFromXml (const juce::XmlElement& xml,
+                                                       juce::String& errorMessage)
+{
+    if (! xml.hasTagName ("VocalEditorState"))
+    {
+        errorMessage = "Not a Vocal Editor project/state file.";
+        return false;
+    }
+
+    const int version = xml.getIntAttribute ("version", 0);
+    if (version != 1)
+    {
+        errorMessage = "Unsupported Vocal Editor state version.";
+        return false;
+    }
+
+    struct EventData
+    {
+        juce::Uuid id;
+        VocalEvent::Type type = VocalEvent::Type::Custom;
+        double start = 0.0;
+        double end = 0.0;
+        float gainDb = 0.0f;
+        double fadeInMs = 0.0;
+        double fadeOutMs = 0.0;
+        VocalEvent::FadeCurve fadeInCurve = VocalEvent::FadeCurve::Smooth;
+        VocalEvent::FadeCurve fadeOutCurve = VocalEvent::FadeCurve::Smooth;
+        bool locked = false;
+        juce::Array<VocalEvent::EnvelopePoint> envelope;
+    };
+
+    std::vector<EventData> stagedEvents;
+    if (auto* events = xml.getChildByName ("Events"))
+    {
+        forEachXmlChildElementWithTagName (*events, item, "Event")
+        {
+            EventData data;
+            data.id = juce::Uuid (item->getStringAttribute ("id"));
+            const int type = item->getIntAttribute ("type", static_cast<int> (VocalEvent::Type::Custom));
+            const int fadeInCurve = item->getIntAttribute ("fadeInCurve", static_cast<int> (VocalEvent::FadeCurve::Smooth));
+            const int fadeOutCurve = item->getIntAttribute ("fadeOutCurve", static_cast<int> (VocalEvent::FadeCurve::Smooth));
+
+            data.start = item->getDoubleAttribute ("start", -1.0);
+            data.end = item->getDoubleAttribute ("end", -1.0);
+            data.gainDb = static_cast<float> (item->getDoubleAttribute ("gainDb", 0.0));
+            data.fadeInMs = item->getDoubleAttribute ("fadeInMs", 0.0);
+            data.fadeOutMs = item->getDoubleAttribute ("fadeOutMs", 0.0);
+            data.locked = item->getBoolAttribute ("locked", false);
+
+            if (data.id.isNull()
+                || type < static_cast<int> (VocalEvent::Type::Phrase)
+                || type > static_cast<int> (VocalEvent::Type::Custom)
+                || fadeInCurve < 0 || fadeInCurve > 1
+                || fadeOutCurve < 0 || fadeOutCurve > 1
+                || ! std::isfinite (data.start) || ! std::isfinite (data.end)
+                || ! std::isfinite (data.gainDb)
+                || ! std::isfinite (data.fadeInMs) || ! std::isfinite (data.fadeOutMs)
+                || data.start < 0.0 || data.end <= data.start
+                || data.gainDb < -96.0f || data.gainDb > 24.0f
+                || data.fadeInMs < 0.0 || data.fadeOutMs < 0.0)
+            {
+                errorMessage = "The project contains an invalid event.";
+                return false;
+            }
+
+            data.type = static_cast<VocalEvent::Type> (type);
+            data.fadeInCurve = static_cast<VocalEvent::FadeCurve> (fadeInCurve);
+            data.fadeOutCurve = static_cast<VocalEvent::FadeCurve> (fadeOutCurve);
+
+            if (auto* envelope = item->getChildByName ("Envelope"))
+            {
+                forEachXmlChildElementWithTagName (*envelope, point, "Point")
+                {
+                    const float t = static_cast<float> (point->getDoubleAttribute ("t", -1.0));
+                    const float gain = static_cast<float> (point->getDoubleAttribute ("gainDb", 0.0));
+                    if (! std::isfinite (t) || ! std::isfinite (gain)
+                        || t < 0.0f || t > 1.0f || gain < -120.0f || gain > 24.0f
+                        || (! data.envelope.isEmpty() && t <= data.envelope.getLast().t))
+                    {
+                        errorMessage = "The project contains an invalid envelope.";
+                        return false;
+                    }
+                    data.envelope.add ({ t, gain });
+                }
+            }
+            stagedEvents.push_back (std::move (data));
+        }
+    }
+
+    const auto audioPath = xml.getStringAttribute ("audioPath");
+    juce::AudioBuffer<float> stagedAudio;
+    double stagedSampleRate = currentSampleRate;
+    juce::File stagedAudioFile;
+
+    if (audioPath.isNotEmpty())
+    {
+        stagedAudioFile = juce::File (audioPath);
+        if (! stagedAudioFile.existsAsFile())
+        {
+            errorMessage = "The source audio file could not be found: " + audioPath;
+            return false;
+        }
+
+        std::unique_ptr<juce::AudioFormatReader> reader (formatManager.createReaderFor (stagedAudioFile));
+        if (reader == nullptr || reader->lengthInSamples <= 0
+            || reader->lengthInSamples > static_cast<juce::int64> (std::numeric_limits<int>::max())
+            || reader->numChannels <= 0 || reader->numChannels > 64
+            || ! std::isfinite (reader->sampleRate) || reader->sampleRate <= 0.0)
+        {
+            errorMessage = "The source audio file is invalid or unsupported.";
+            return false;
+        }
+
+        stagedAudio.setSize (static_cast<int> (reader->numChannels),
+                             static_cast<int> (reader->lengthInSamples));
+        if (! reader->read (&stagedAudio, 0, stagedAudio.getNumSamples(), 0, true, true))
+        {
+            errorMessage = "The source audio file could not be read completely.";
+            return false;
+        }
+        stagedSampleRate = reader->sampleRate;
+    }
+
+    // Commit only after the XML and source audio have passed validation.
+    audioBuffer = std::move (stagedAudio);
+    currentAudioFile = stagedAudioFile;
+    currentSampleRate = stagedSampleRate;
+    eventList.clear();
+    selectedEvent = nullptr;
+    selectedEventIds.clear();
+
+    for (const auto& data : stagedEvents)
+    {
+        auto* event = eventList.add (data.start, data.end, data.type);
+        event->id = data.id;
+        event->gainDb = data.gainDb;
+        event->fadeInMs = juce::jmin (data.fadeInMs, event->getLength() * 500.0);
+        event->fadeOutMs = juce::jmin (data.fadeOutMs, event->getLength() * 500.0);
+        event->fadeInCurve = data.fadeInCurve;
+        event->fadeOutCurve = data.fadeOutCurve;
+        event->locked = data.locked;
+        event->envelope = data.envelope;
+    }
+
+    if (auto* selected = xml.getChildByName ("SelectedEvents"))
+    {
+        forEachXmlChildElementWithTagName (*selected, item, "Id")
+        {
+            const juce::Uuid id (item->getStringAttribute ("value"));
+            if (eventList.getById (id) != nullptr)
+                selectedEventIds.addIfNotAlreadyThere (id);
+        }
+    }
+
+    if (! selectedEventIds.isEmpty())
+        selectedEvent = eventList.getById (selectedEventIds.getFirst());
+
+    const double maxPosition = audioBuffer.getNumSamples() > 0
+        ? static_cast<double> (audioBuffer.getNumSamples()) / currentSampleRate : 0.0;
+    playbackPosition = juce::jlimit (0.0, maxPosition,
+                                     xml.getDoubleAttribute ("playbackPosition", 0.0));
+    playbackSamplePosition = static_cast<int> (playbackPosition * currentSampleRate);
+    currentlyPlaying = false;
+
+    selection.startTime = juce::jmax (0.0, xml.getDoubleAttribute ("selectionStart", 0.0));
+    selection.endTime = juce::jmax (selection.startTime,
+                                    xml.getDoubleAttribute ("selectionEnd", 0.0));
+    selection.isActive = xml.getBoolAttribute ("selectionActive", false)
+                         && selection.endTime > selection.startTime;
+    if (audioBuffer.getNumSamples() > 0)
+    {
+        const double duration = static_cast<double> (audioBuffer.getNumSamples()) / currentSampleRate;
+        selection.startTime = juce::jmin (selection.startTime, duration);
+        selection.endTime = juce::jmin (selection.endTime, duration);
+        if (selection.endTime <= selection.startTime)
+            selection.isActive = false;
+    }
+    else
+    {
+        selection = {};
+    }
+
+    undoManager.clearUndoHistory();
+    updateProcessedBuffer();
+    errorMessage.clear();
+    return true;
+}
+
 void VocalEditorAudioProcessor::getStateInformation (juce::MemoryBlock& destData)
 {
-    // Phase 1: Basic state (will expand later)
-    juce::ignoreUnused (destData);
+    if (auto xml = createStateXml())
+        copyXmlToBinary (*xml, destData);
 }
 
 void VocalEditorAudioProcessor::setStateInformation (const void* data, int sizeInBytes)
 {
-    juce::ignoreUnused (data, sizeInBytes);
+    if (data == nullptr || sizeInBytes <= 0)
+        return;
+
+    std::unique_ptr<juce::XmlElement> xml (getXmlFromBinary (data, sizeInBytes));
+    if (xml == nullptr)
+        return;
+
+    juce::String error;
+    restoreStateFromXml (*xml, error);
+}
+
+bool VocalEditorAudioProcessor::saveProject (const juce::File& projectFile)
+{
+    if (projectFile == juce::File() || projectFile.isDirectory())
+        return false;
+
+    auto xml = createStateXml();
+    if (xml == nullptr)
+        return false;
+
+    if (! xml->writeTo (projectFile))
+        return false;
+
+    currentProjectFile = projectFile;
+    return true;
+}
+
+bool VocalEditorAudioProcessor::loadProject (const juce::File& projectFile,
+                                              juce::String& errorMessage)
+{
+    if (! projectFile.existsAsFile())
+    {
+        errorMessage = "Project file does not exist.";
+        return false;
+    }
+
+    juce::XmlDocument document (projectFile);
+    std::unique_ptr<juce::XmlElement> xml (document.getDocumentElement());
+    if (xml == nullptr)
+    {
+        errorMessage = "The project file is not valid XML.";
+        return false;
+    }
+
+    if (! restoreStateFromXml (*xml, errorMessage))
+        return false;
+
+    currentProjectFile = projectFile;
+    return true;
 }
 
 //==============================================================================
