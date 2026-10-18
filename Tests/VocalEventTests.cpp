@@ -152,6 +152,55 @@ namespace
                "rendered fade-out ends at silence");
     }
 
+    void testSmoothWordDynamicsTransitions()
+    {
+        constexpr double sampleRate = 48000.0;
+        constexpr int totalSamples = 4800;
+        juce::AudioBuffer<float> audio (1, totalSamples);
+        for (int i = 0; i < totalSamples; ++i)
+            audio.setSample (0, i, 0.5f);
+
+        VocalEvent event;
+        event.startTime = 0.025;
+        event.endTime = 0.075;
+        event.gainDb = 0.0f;
+        event.dynamicGainDb = 6.0f;
+        event.gainTransitionInMs = 10.0;
+        event.gainTransitionOutMs = 10.0;
+        VocalAudioMath::applyEventToBuffer (event, audio, sampleRate);
+
+        const int start = 1200;
+        const int end = 3600;
+        const float base = 0.5f;
+        const float boosted = base * juce::Decibels::decibelsToGain (6.0f);
+        check (near (audio.getSample (0, start), base),
+               "smooth word dynamics starts at the unboosted level");
+        check (audio.getSample (0, start + 120) > base
+                   && audio.getSample (0, start + 120) < boosted,
+               "smooth gain-in creates an intermediate curved level");
+        check (near (audio.getSample (0, start + 479), boosted),
+               "smooth gain-in reaches the requested boost at its end");
+        check (near (audio.getSample (0, (start + end) / 2), boosted),
+               "word body holds the full dynamic gain boost");
+        check (near (audio.getSample (0, end - 480), boosted),
+               "smooth gain-out begins from the full boost");
+        check (audio.getSample (0, end - 120) > base
+                   && audio.getSample (0, end - 120) < boosted,
+               "smooth gain-out creates an intermediate curved level");
+        check (near (audio.getSample (0, end - 1), base),
+               "smooth word dynamics returns to the unboosted level at the end");
+        check (near (audio.getSample (0, start - 1), base)
+                   && near (audio.getSample (0, end), base),
+               "samples outside the event remain untouched");
+
+        check (near (VocalAudioMath::dynamicGainWindowAtSample (0, 100, 0, 0), 1.0f),
+               "zero transition duration leaves the additional gain constant");
+        check (near (VocalAudioMath::dynamicGainWindowAtSample (0, 100, 20, 0), 0.0f),
+               "smooth gain-in starts with no additional boost");
+        check (near (VocalAudioMath::dynamicGainWindowAtSample (99, 100, 0, 20), 0.0f),
+               "smooth gain-out ends with no additional boost");
+    }
+
     void testSplitEnvelopeSlicesPreserveAutomation()
     {
         VocalEvent original;
@@ -465,6 +514,7 @@ int main()
     testMergeEnvelopeBoundaryCompatibility();
     testSplitEnvelopeSlicesPreserveAutomation();
     testSignalLevelGainAndFadeRendering();
+    testSmoothWordDynamicsTransitions();
     testRenderedEventRmsIncludesEnvelopeAndFades();
 
     if (failures == 0)
