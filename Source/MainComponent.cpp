@@ -180,6 +180,20 @@ MainComponent::MainComponent (VocalEditorAudioProcessor& p)
     for (auto* slider : { &roomTailThresholdSlider, &roomTailReductionSlider, &roomTailSensitivitySlider })
         slider->onValueChange = [this] { roomTailReductionChanged(); };
 
+    spectralBalanceToggle.setColour (juce::ToggleButton::textColourId, textColour);
+    spectralBalanceToggle.setToggleState (processor.isSpectralBalanceEnabled(), juce::dontSendNotification);
+    spectralBalanceToggle.onClick = [this] { processor.setSpectralBalanceEnabled (spectralBalanceToggle.getToggleState()); };
+    spectralBalanceToggle.setTooltip ("Enable broad three-band tone shaping on the rendered audio.");
+    addAndMakeVisible (spectralBalanceToggle);
+    setupDeEsserSlider (spectralLowSlider, -12.0, 12.0, 0.5, " dB", processor.getSpectralLowDb());
+    setupDeEsserSlider (spectralMidSlider, -12.0, 12.0, 0.5, " dB", processor.getSpectralMidDb());
+    setupDeEsserSlider (spectralHighSlider, -12.0, 12.0, 0.5, " dB", processor.getSpectralHighDb());
+    spectralLowSlider.setTooltip ("Low band below approximately 180 Hz");
+    spectralMidSlider.setTooltip ("Mid band between approximately 180 Hz and 4.5 kHz");
+    spectralHighSlider.setTooltip ("High band above approximately 4.5 kHz");
+    for (auto* slider : { &spectralLowSlider, &spectralMidSlider, &spectralHighSlider })
+        slider->onValueChange = [this] { spectralBalanceChanged(); };
+
     addAndMakeVisible (timeline);
     addAndMakeVisible (waveform);
     addAndMakeVisible (eventPanel);
@@ -274,6 +288,13 @@ void MainComponent::resized()
     roomTailThresholdSlider.setBounds (roomTailBar.removeFromLeft (220).reduced (2, 3));
     roomTailReductionSlider.setBounds (roomTailBar.removeFromLeft (220).reduced (2, 3));
     roomTailSensitivitySlider.setBounds (roomTailBar.removeFromLeft (220).reduced (2, 3));
+
+    auto spectralBalanceBar = bounds.removeFromTop (38);
+    spectralBalanceBar.reduce (8, 1);
+    spectralBalanceToggle.setBounds (spectralBalanceBar.removeFromLeft (150).reduced (1, 3));
+    spectralLowSlider.setBounds (spectralBalanceBar.removeFromLeft (220).reduced (2, 3));
+    spectralMidSlider.setBounds (spectralBalanceBar.removeFromLeft (220).reduced (2, 3));
+    spectralHighSlider.setBounds (spectralBalanceBar.removeFromLeft (220).reduced (2, 3));
 
     // Status bar
     auto statusBar = bounds.removeFromBottom (28);
@@ -474,6 +495,14 @@ void MainComponent::roomTailReductionChanged()
         static_cast<float> (roomTailSensitivitySlider.getValue()));
 }
 
+void MainComponent::spectralBalanceChanged()
+{
+    processor.setSpectralBalanceParameters (
+        static_cast<float> (spectralLowSlider.getValue()),
+        static_cast<float> (spectralMidSlider.getValue()),
+        static_cast<float> (spectralHighSlider.getValue()));
+}
+
 void MainComponent::levelProcessClicked()
 {
     const int count = processor.levelEventsToTarget (
@@ -606,6 +635,17 @@ void MainComponent::timerCallback()
     if (! roomTailSensitivitySlider.isMouseButtonDown()
         && std::abs (roomTailSensitivitySlider.getValue() - processor.getRoomTailSensitivity()) > 0.01)
         roomTailSensitivitySlider.setValue (processor.getRoomTailSensitivity(), juce::dontSendNotification);
+    if (! spectralBalanceToggle.isMouseButtonDown())
+        spectralBalanceToggle.setToggleState (processor.isSpectralBalanceEnabled(), juce::dontSendNotification);
+    if (! spectralLowSlider.isMouseButtonDown()
+        && std::abs (spectralLowSlider.getValue() - processor.getSpectralLowDb()) > 0.1)
+        spectralLowSlider.setValue (processor.getSpectralLowDb(), juce::dontSendNotification);
+    if (! spectralMidSlider.isMouseButtonDown()
+        && std::abs (spectralMidSlider.getValue() - processor.getSpectralMidDb()) > 0.1)
+        spectralMidSlider.setValue (processor.getSpectralMidDb(), juce::dontSendNotification);
+    if (! spectralHighSlider.isMouseButtonDown()
+        && std::abs (spectralHighSlider.getValue() - processor.getSpectralHighDb()) > 0.1)
+        spectralHighSlider.setValue (processor.getSpectralHighDb(), juce::dontSendNotification);
 
     // Update play button text
     playButton.setButtonText (processor.isPlaying() ? "Pause" : "Play");
