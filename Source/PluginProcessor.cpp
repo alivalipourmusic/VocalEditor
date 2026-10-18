@@ -1039,6 +1039,13 @@ VocalEvent* VocalEditorAudioProcessor::createEventFromSelection (VocalEvent::Typ
     if (end - start < 0.005)
         return nullptr;
 
+    // Event gains are applied to the processed signal. Overlapping regions
+    // would multiply their gains and create an unintended level change.
+    for (const auto* existing : eventList.getAll())
+        if (existing != nullptr
+            && VocalAudioMath::intervalsOverlap (start, end, existing->startTime, existing->endTime))
+            return nullptr;
+
     const auto before = captureEventState();
     auto* event = eventList.add (start, end, type);
     setSelectedEvent (event);
