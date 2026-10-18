@@ -1132,9 +1132,11 @@ void VocalEditorAudioProcessor::recordEventUndo (const juce::XmlElement& before,
         return;
 
     // JUCE's second perform() argument is a transaction name, not a time
-    // interval. Use the action name to create meaningful Undo history.
+    // interval. Use explicit transactions for each edit and keep the existing
+    // parameter temporarily for source compatibility with coalescing callers.
     juce::ignoreUnused (coalesceMs);
-    undoManager.perform (new EventStateAction (*this, before, after, actionName), actionName);
+    undoManager.beginNewTransaction (actionName);
+    undoManager.perform (new EventStateAction (*this, before, after, actionName));
 }
 
 VocalEvent* VocalEditorAudioProcessor::createEventFromSelection (VocalEvent::Type type)
