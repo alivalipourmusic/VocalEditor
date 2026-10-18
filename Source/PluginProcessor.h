@@ -67,6 +67,8 @@ public:
     void startPlayback();
     void stopPlayback();
     bool isPlaying() const { return currentlyPlaying; }
+    void setComparisonMode (bool enabled);
+    bool isComparisonMode() const { return comparisonMode; }
 
     struct Selection
     {
@@ -169,6 +171,7 @@ private:
     // the audio thread reads one immutable snapshot without taking a blocking lock.
     std::array<juce::AudioBuffer<float>, 3> processedBuffers;
     std::atomic<int> activeProcessedBuffer { 0 };
+    bool comparisonMode = false;
     bool processingBypassed = false;
     std::atomic<int> readingProcessedBuffer { -1 };
 
