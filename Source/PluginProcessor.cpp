@@ -1019,6 +1019,30 @@ void VocalEditorAudioProcessor::setEventFades (const juce::Uuid& id, double fade
     }
 }
 
+void VocalEditorAudioProcessor::setEventEnvelopePoint (const juce::Uuid& id, float t, float gainDb)
+{
+    if (auto* event = eventList.getById (id))
+    {
+        if (event->locked)
+            return;
+
+        event->addOrUpdateEnvelopePoint (t, juce::jlimit (-60.0f, 12.0f, gainDb));
+        updateProcessedBuffer();
+    }
+}
+
+void VocalEditorAudioProcessor::removeEventEnvelopePoint (const juce::Uuid& id, int pointIndex)
+{
+    if (auto* event = eventList.getById (id))
+    {
+        if (event->locked)
+            return;
+
+        event->removeEnvelopePoint (pointIndex);
+        updateProcessedBuffer();
+    }
+}
+
 void VocalEditorAudioProcessor::setSelectedEvent (VocalEvent* event)
 {
     selectedEvent = event;
