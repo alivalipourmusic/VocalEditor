@@ -3,6 +3,7 @@
 #include <JuceHeader.h>
 #include "VocalEvent.h"
 #include <cmath>
+#include <limits>
 #include <utility>
 #include <vector>
 
@@ -18,6 +19,27 @@ namespace VocalAudioMath
             return false;
 
         return startA < endB - tolerance && startB < endA - tolerance;
+    }
+
+    // Check full-buffer allocation sizes before asking AudioBuffer to allocate.
+    inline bool isReasonableAudioAllocation (int channels,
+                                               juce::int64 samples,
+                                               size_t maxBytes = (size_t) 2 * 1024 * 1024 * 1024ULL) noexcept
+    {
+        if (channels <= 0 || samples <= 0
+            || samples > static_cast<juce::int64> (std::numeric_limits<int>::max()))
+            return false;
+
+        const auto channelCount = static_cast<size_t> (channels);
+        const auto sampleCount = static_cast<size_t> (samples);
+        if (sampleCount > std::numeric_limits<size_t>::max() / channelCount)
+            return false;
+
+        const auto totalSamples = channelCount * sampleCount;
+        if (totalSamples > std::numeric_limits<size_t>::max() / sizeof (float))
+            return false;
+
+        return totalSamples * sizeof (float) <= maxBytes;
     }
 
     inline bool isValidNonOverlappingTimeline (
