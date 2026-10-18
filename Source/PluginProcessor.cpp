@@ -193,13 +193,140 @@ juce::AudioProcessorEditor* VocalEditorAudioProcessor::createEditor()
 //==============================================================================
 void VocalEditorAudioProcessor::getStateInformation (juce::MemoryBlock& destData)
 {
-    // Phase 1: Basic state (will expand later)
-    juce::ignoreUnused (destData);
+    // Store non-destructive edits in the host session. Audio remains an external
+    // source file so DAW project state does not balloon with long recordings.
+    juce::ValueTree state ("VocalEditorState");
+    state.setProperty ("version", 1, nullptr);
+    state.setProperty ("audioFile", currentAudioFile.getFullPathName(), nullptr);
+
+    for (const auto* event : eventList.getAll())
+    {
+        if (event == nullptr)
+            continue;
+
+        juce::ValueTree eventState ("Event");
+        eventState.setProperty ("id", event->id.toString(), nullptr);
+        eventState.setProperty ("type", static_cast<int> (event->type), nullptr);
+        eventState.setProperty ("start", event->startTime, nullptr);
+        eventState.setProperty ("end", event->endTime, nullptr);
+        eventState.setProperty ("gainDb", event->gainDb, nullptr);
+        eventState.setProperty ("fadeInMs", event->fadeInMs, nullptr);
+        eventState.setProperty ("fadeOutMs", event->fadeOutMs, nullptr);
+        eventState.setProperty ("fadeInCurve", static_cast<int> (event->fadeInCurve), nullptr);
+        eventState.setProperty ("fadeOutCurve", static_cast<int> (event->fadeOutCurve), nullptr);
+        eventState.setProperty ("locked", event->locked, nullptr);
+
+        for (const auto& point : event->envelope)
+        {
+            juce::ValueTree pointState ("EnvelopePoint");
+            pointState.setProperty ("t", point.t, nullptr);
+            pointState.setProperty ("gainDb", point.gainDb, nullptr);
+            eventState.addChild (pointState, -1, nullptr);
+        }
+        state.addChild (eventState, -1, nullptr);
+    }
+
+    if (auto xml = state.createXml())
+        copyXmlToBinary (*xml, destData);
 }
 
 void VocalEditorAudioProcessor::setStateInformation (const void* data, int sizeInBytes)
 {
-    juce::ignoreUnused (data, sizeInBytes);
+    if (data == nullptr || sizeInBytes <= 0)
+        return;
+
+    auto xml = getXmlFromBinary (data, sizeInBytes);
+    if (xml == nullptr || ! xml->hasTagName ("VocalEditorState"))
+        return;
+
+    const auto state = juce::ValueTree::fromXml (*xml);
+    if (! state.isValid() || state.getType() != juce::Identifier ("VocalEditorState"))
+        return;
+
+    const auto audioPath = state.getProperty ("audioFile").toString();
+    const juce::File audioFile (audioPath);
+
+    // Avoid destroying the current session if the saved source has been moved.
+    if (audioPath.isNotEmpty() && ! audioFile.existsAsFile())
+        return;
+
+    if (audioFile.existsAsFile())
+        loadAudioFile (audioFile);
+    else
+        clearAudio();
+
+    eventList.clear();
+    selectedEvent = nullptr;
+    selectedEventIds.clear();
+
+    const double duration = getDuration();
+    for (int i = 0; i < state.getNumChildren(); ++i)
+    {
+        const auto eventState = state.getChild (i);
+        if (! eventState.hasType ("Event"))
+            continue;
+
+        const int rawType = static_cast<int> (eventState.getProperty ("type", 4));
+        const double rawStart = static_cast<double> (eventState.getProperty ("start", 0.0));
+        const double rawEnd = static_cast<double> (eventState.getProperty ("end", 0.0));
+        if (! std::isfinite (rawStart) || ! std::isfinite (rawEnd)
+            || rawEnd <= rawStart || rawEnd <= 0.0 || rawStart >= duration)
+            continue;
+
+        const double start = juce::jlimit (0.0, duration, rawStart);
+        const double end = juce::jlimit (start, duration, rawEnd);
+        if (end - start < 0.001)
+            continue;
+
+        const auto type = static_cast<VocalEvent::Type> (juce::jlimit (0, 4, rawType));
+        auto* event = eventList.add (start, end, type);
+        const auto storedId = eventState.getProperty ("id").toString();
+        if (storedId.isNotEmpty())
+            event->id = juce::Uuid (storedId);
+
+        const double rawGain = static_cast<double> (eventState.getProperty ("gainDb", 0.0));
+        const double rawFadeIn = static_cast<double> (eventState.getProperty ("fadeInMs", 0.0));
+        const double rawFadeOut = static_cast<double> (eventState.getProperty ("fadeOutMs", 0.0));
+        event->gainDb = static_cast<float> (std::isfinite (rawGain)
+            ? juce::jlimit (-96.0, 24.0, rawGain) : 0.0);
+        event->fadeInMs = std::isfinite (rawFadeIn)
+            ? juce::jlimit (0.0, event->getLength() * 500.0, rawFadeIn) : 0.0;
+        event->fadeOutMs = std::isfinite (rawFadeOut)
+            ? juce::jlimit (0.0, event->getLength() * 500.0, rawFadeOut) : 0.0;
+        event->fadeInCurve = static_cast<VocalEvent::FadeCurve> (
+            juce::jlimit (0, 1, static_cast<int> (eventState.getProperty ("fadeInCurve", 1))));
+        event->fadeOutCurve = static_cast<VocalEvent::FadeCurve> (
+            juce::jlimit (0, 1, static_cast<int> (eventState.getProperty ("fadeOutCurve", 1))));
+        event->locked = static_cast<bool> (eventState.getProperty ("locked", false));
+
+        for (int child = 0; child < eventState.getNumChildren(); ++child)
+        {
+            const auto pointState = eventState.getChild (child);
+            if (! pointState.hasType ("EnvelopePoint"))
+                continue;
+
+            const double rawT = static_cast<double> (pointState.getProperty ("t", 0.0));
+            const double rawPointGain = static_cast<double> (pointState.getProperty ("gainDb", event->gainDb));
+            if (! std::isfinite (rawT) || ! std::isfinite (rawPointGain))
+                continue;
+
+            event->envelope.add ({
+                static_cast<float> (juce::jlimit (0.0, 1.0, rawT)),
+                static_cast<float> (juce::jlimit (-120.0, 24.0, rawPointGain))
+            });
+        }
+
+        std::sort (event->envelope.begin(), event->envelope.end(),
+            [] (const VocalEvent::EnvelopePoint& a, const VocalEvent::EnvelopePoint& b)
+            {
+                return a.t < b.t;
+            });
+    }
+
+    if (eventList.size() > 0)
+        setSelectedEvent (eventList.get (0));
+
+    updateProcessedBuffer();
 }
 
 //==============================================================================
