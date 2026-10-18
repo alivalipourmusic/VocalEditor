@@ -529,24 +529,66 @@ void VocalEditorAudioProcessor::splitEvent (const juce::Uuid& id, double splitTi
     if (split - event->startTime < 0.005 || event->endTime - split < 0.005)
         return;
 
+    const double originalStart = event->startTime;
     const double originalEnd = event->endTime;
+    const double originalFadeIn = event->fadeInMs;
     const double originalFadeOut = event->fadeOutMs;
     const auto originalType = event->type;
+    const auto originalFadeInCurve = event->fadeInCurve;
     const auto originalFadeOutCurve = event->fadeOutCurve;
     const float originalGain = event->gainDb;
+    const VocalEvent originalEvent = *event;
+    const bool hadCustomEnvelope = ! originalEvent.envelope.isEmpty();
+    const float splitNormalised = static_cast<float> (
+        (split - originalStart) / (originalEnd - originalStart));
+
+    // Slice the original envelope into two independently normalised curves.
+    // Sampling both boundaries preserves the original interpolated gain at the split.
+    auto makeEnvelopeSlice = [&originalEvent] (float from, float to)
+    {
+        juce::Array<VocalEvent::EnvelopePoint> slice;
+        const float span = to - from;
+        if (span <= 0.0f)
+            return slice;
+
+        auto addPoint = [&slice] (float t, float gainDb)
+        {
+            t = juce::jlimit (0.0f, 1.0f, t);
+            if (! slice.isEmpty()
+                && std::abs (slice.getLast().t - t) < 1.0e-6f)
+            {
+                slice.getReference (slice.size() - 1).gainDb = gainDb;
+                return;
+            }
+            slice.add ({ t, gainDb });
+        };
+
+        addPoint (0.0f, originalEvent.getEnvelopeGainDb (from));
+        for (const auto& point : originalEvent.envelope)
+        {
+            if (point.t > from + 1.0e-6f && point.t < to - 1.0e-6f)
+                addPoint ((point.t - from) / span, point.gainDb);
+        }
+        addPoint (1.0f, originalEvent.getEnvelopeGainDb (to));
+        return slice;
+    };
 
     // Keep the original event as the left-hand segment. The original fade-in
     // remains at the beginning; the original fade-out moves to the right segment.
     event->endTime = split;
     event->fadeOutMs = 0.0;
+    if (hadCustomEnvelope)
+        event->envelope = makeEnvelopeSlice (0.0f, splitNormalised);
 
     auto* right = eventList.add (split, originalEnd, originalType);
     right->gainDb = originalGain;
     right->fadeInMs = 0.0;
     right->fadeOutMs = juce::jmin (originalFadeOut, right->getLength() * 500.0);
     right->fadeOutCurve = originalFadeOutCurve;
-    right->fadeInCurve = event->fadeInCurve;
+    right->fadeInCurve = originalFadeInCurve;
     right->locked = false;
+    if (hadCustomEnvelope)
+        right->envelope = makeEnvelopeSlice (splitNormalised, 1.0f);
 
     setSelectedEvent (event);
     updateProcessedBuffer();
