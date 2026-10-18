@@ -6,6 +6,17 @@
 
 namespace VocalAudioMath
 {
+    inline bool intervalsOverlap (double startA, double endA,
+                                  double startB, double endB,
+                                  double tolerance = 1.0e-6) noexcept
+    {
+        if (! std::isfinite (startA) || ! std::isfinite (endA)
+            || ! std::isfinite (startB) || ! std::isfinite (endB)
+            || endA <= startA || endB <= startB)
+            return false;
+
+        return startA < endB - tolerance && startB < endA - tolerance;
+    }
     inline double fadeCurveValue (double progress, VocalEvent::FadeCurve curve) noexcept
     {
         const double x = juce::jlimit (0.0, 1.0, progress);
