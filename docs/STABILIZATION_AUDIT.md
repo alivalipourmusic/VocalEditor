@@ -244,3 +244,13 @@ ctest --test-dir build -C Release --output-on-failure
 - [x] Add regression coverage that checks split envelope slices preserve source automation at the split boundary and across a dense set of points on both sides.
 - [ ] Run Windows CI to completion. Several rapid commits caused older CI runs to be cancelled by the concurrency policy; the latest commit's run must be checked after the batch is complete.
 - [ ] Runtime-test split/merge, undo/redo, and playback while editing on Windows/Cubase before marking them verified.
+
+
+## Phase 18 progress: edit-input guards and fade-fit overflow
+
+- [x] Reject non-finite gain, fade duration, and split-time values before they can mutate an event or pollute Undo snapshots.
+- [x] Validate split minimum segment lengths before taking an Undo snapshot, avoiding unnecessary history capture for no-op edits.
+- [x] Fix signed integer overflow in fade fitting by accumulating fade lengths in a 64-bit integer.
+- [x] Add a regression test with both fades set to INT_MAX, asserting the fitted sum exactly equals the event length and neither fade exceeds it.
+- [ ] Confirm the latest Windows CI build and CTest result after the full batch of commits.
+- [ ] Runtime audio checks remain required for fade continuity when splitting inside a fade region, Undo/Redo through repeated edits, and playback under Cubase.
