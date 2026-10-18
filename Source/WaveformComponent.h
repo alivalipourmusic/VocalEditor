@@ -55,6 +55,7 @@ private:
     double xToTime (float x) const;
     void drawWaveform (juce::Graphics& g);
     void drawEvents (juce::Graphics& g);
+    void drawEventWaveform (juce::Graphics& g, const VocalEvent& event, float x1, float x2);
     void drawFadeHandles (juce::Graphics& g, const VocalEvent& e, bool isSelected);
     void drawSelection (juce::Graphics& g);
     void drawPlayhead (juce::Graphics& g);
