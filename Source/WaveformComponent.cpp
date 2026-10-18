@@ -85,13 +85,75 @@ void WaveformComponent::drawEvents (juce::Graphics& g)
         const bool selected = processor.getSelectedEvent() != nullptr
                            && processor.getSelectedEvent()->id == event->id;
         const auto colour = selected ? juce::Colour (0xff0e7490) : juce::Colour (0xff155e75);
-        g.setColour (colour.withAlpha (selected ? 0.28f : 0.16f));
+        g.setColour (juce::Colour (0xff0b1220).withAlpha (selected ? 0.94f : 0.82f));
         g.fillRoundedRectangle (x1, 2.0f, x2 - x1, static_cast<float> (getHeight() - 4), 3.0f);
+        drawEventWaveform (g, *event, x1, x2);
         g.setColour (selected ? juce::Colour (0xff67e8f9) : juce::Colour (0xff2dd4bf));
         g.drawVerticalLine (static_cast<int> (x1), 1.0f, static_cast<float> (getHeight() - 1));
         g.drawVerticalLine (static_cast<int> (x2), 1.0f, static_cast<float> (getHeight() - 1));
         drawFadeHandles (g, *event, selected);
     }
+}
+
+void WaveformComponent::drawEventWaveform (juce::Graphics& g, const VocalEvent& event, float x1, float x2)
+{
+    const auto& audio = processor.getAudioBuffer();
+    const double sampleRate = processor.getSampleRate();
+    if (audio.getNumSamples() <= 0 || audio.getNumChannels() <= 0 || sampleRate <= 0.0 || x2 - x1 < 1.0f)
+        return;
+
+    const int left = juce::jlimit (0, getWidth(), static_cast<int> (std::floor (x1)));
+    const int right = juce::jlimit (0, getWidth(), static_cast<int> (std::ceil (x2)));
+    const float centreY = static_cast<float> (getHeight()) * 0.5f;
+    const float amplitudeScale = static_cast<float> (getHeight()) * 0.43f;
+    const float gain = juce::Decibels::decibelsToGain (event.gainDb);
+    const double fadeInSeconds = event.fadeInMs * 0.001;
+    const double fadeOutSeconds = event.fadeOutMs * 0.001;
+
+    auto smoothFade = [] (double x)
+    {
+        x = juce::jlimit (0.0, 1.0, x);
+        return x * x * (3.0 - 2.0 * x);
+    };
+
+    g.saveState();
+    g.reduceClipRegion (juce::Rectangle<int> (left, 2, juce::jmax (0, right - left), juce::jmax (0, getHeight() - 4)));
+    g.setColour (juce::Colour (0xff67e8f9).withAlpha (0.95f));
+
+    for (int x = left; x < right; ++x)
+    {
+        const double t0 = xToTime (static_cast<float> (x));
+        const double t1 = xToTime (static_cast<float> (x + 1));
+        const int s0 = juce::jlimit (0, audio.getNumSamples() - 1, static_cast<int> (std::floor (t0 * sampleRate)));
+        const int s1 = juce::jlimit (s0 + 1, audio.getNumSamples(), static_cast<int> (std::ceil (t1 * sampleRate)));
+        float peak = 0.0f;
+
+        for (int ch = 0; ch < audio.getNumChannels(); ++ch)
+        {
+            const auto* samples = audio.getReadPointer (ch);
+            for (int s = s0; s < s1; ++s)
+            {
+                const double sampleTime = static_cast<double> (s) / sampleRate;
+                if (sampleTime < event.startTime || sampleTime >= event.endTime)
+                    continue;
+
+                double fadeGain = 1.0;
+                const double fromStart = sampleTime - event.startTime;
+                const double toEnd = event.endTime - sampleTime;
+                if (fadeInSeconds > 0.0 && fromStart < fadeInSeconds)
+                    fadeGain *= smoothFade (fromStart / fadeInSeconds);
+                if (fadeOutSeconds > 0.0 && toEnd < fadeOutSeconds)
+                    fadeGain *= smoothFade (toEnd / fadeOutSeconds);
+
+                peak = juce::jmax (peak, std::abs (samples[s] * gain * static_cast<float> (fadeGain)));
+            }
+        }
+
+        const float h = juce::jlimit (0.5f, amplitudeScale, peak * amplitudeScale);
+        g.drawVerticalLine (x, centreY - h, centreY + h);
+    }
+
+    g.restoreState();
 }
 
 void WaveformComponent::drawFadeHandles (juce::Graphics& g, const VocalEvent& event, bool isSelected)
