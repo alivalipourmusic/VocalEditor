@@ -305,11 +305,18 @@ namespace
         check (std::abs (envelopeRms - 0.5 * juce::Decibels::decibelsToGain (-12.0f)) < 1.0e-4,
                "rendered RMS uses custom envelope gain rather than the base gain field");
 
+        event.dynamicGainDb = 6.0f;
+        event.gainTransitionInMs = 10.0;
+        event.gainTransitionOutMs = 10.0;
+        const double dynamicallyBoostedRms = VocalAudioMath::measureRenderedEventRms (event, source, sampleRate);
+        check (dynamicallyBoostedRms > envelopeRms,
+               "rendered RMS includes the additional smooth word-level gain boost");
+
         event.fadeInMs = 10.0;
         event.fadeOutMs = 10.0;
         const double fadedRms = VocalAudioMath::measureRenderedEventRms (event, source, sampleRate);
-        check (fadedRms < envelopeRms,
-               "rendered RMS accounts for fade-in and fade-out attenuation");
+        check (fadedRms < dynamicallyBoostedRms,
+               "rendered RMS accounts for fade-in and fade-out attenuation as well as dynamic gain");
     }
 
     void testAudioAllocationPreflight()
