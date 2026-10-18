@@ -220,7 +220,7 @@ void VocalEditorAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, 
     {
         playbackPosition.store (nextPosition, std::memory_order_release);
         playbackSamplePosition.store (
-            juce::jlimit (0, sourceLength, static_cast<int> (std::floor (nextPosition * sourceRate))),
+            VocalAudioMath::timeToSampleIndex (nextPosition, sourceRate, sourceLength),
             std::memory_order_release);
     }
 
@@ -922,13 +922,6 @@ int VocalEditorAudioProcessor::levelEventsToTarget (float targetDb, bool selecte
     for (auto* event : targets)
     {
         if (event == nullptr || event->locked)
-            continue;
-
-        const int start = juce::jlimit (0, audioBuffer.getNumSamples(),
-            static_cast<int> (std::floor (event->startTime * currentSampleRate)));
-        const int end = juce::jlimit (start, audioBuffer.getNumSamples(),
-            static_cast<int> (std::ceil (event->endTime * currentSampleRate)));
-        if (end <= start)
             continue;
 
         // Measure what this event currently outputs, not just the unprocessed
