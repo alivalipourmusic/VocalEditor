@@ -566,6 +566,11 @@ bool MainComponent::keyPressed (const juce::KeyPress& key, juce::Component* orig
 //==============================================================================
 void MainComponent::timerCallback()
 {
+    // Retry any render publication deferred because all non-active snapshots
+    // were briefly pinned by the audio callback or an export operation.
+    if (processor.isProcessedBufferUpdatePending())
+        processor.updateProcessedBuffer();
+
     // Update time display
     double pos = processor.getPlaybackPosition();
     int mins = static_cast<int> (pos) / 60;
