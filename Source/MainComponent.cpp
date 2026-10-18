@@ -363,8 +363,8 @@ void MainComponent::exportAudioButtonClicked()
         if (file == juce::File())
             return;
 
-        if (! file.hasFileExtension ("wav") && ! file.hasFileExtension ("aif")
-            && ! file.hasFileExtension ("aiff"))
+        if (! file.hasFileExtension (".wav") && ! file.hasFileExtension (".aif")
+            && ! file.hasFileExtension (".aiff"))
             file = file.withFileExtension ("wav");
 
         juce::String error;
