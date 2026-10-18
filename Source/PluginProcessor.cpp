@@ -140,9 +140,11 @@ void VocalEditorAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, 
         for (;;)
         {
             sourceIndex = activeProcessedBuffer.load (std::memory_order_acquire);
-            readingProcessedBuffer.store (sourceIndex, std::memory_order_release);
+            processedBufferReaders[static_cast<size_t> (sourceIndex)].fetch_add (1, std::memory_order_acq_rel);
             if (sourceIndex == activeProcessedBuffer.load (std::memory_order_acquire))
                 break;
+
+            processedBufferReaders[static_cast<size_t> (sourceIndex)].fetch_sub (1, std::memory_order_release);
         }
 
         const auto& source = processedBuffers[static_cast<size_t> (sourceIndex)];
@@ -157,7 +159,7 @@ void VocalEditorAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, 
             playbackPosition = 0.0;
             playbackSamplePosition = 0;
             buffer.clear();
-            readingProcessedBuffer.store (-1, std::memory_order_release);
+            processedBufferReaders[static_cast<size_t> (sourceIndex)].fetch_sub (1, std::memory_order_release);
             return;
         }
 
@@ -177,7 +179,7 @@ void VocalEditorAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, 
 
         playbackSamplePosition = position + samplesToCopy;
         playbackPosition = static_cast<double> (playbackSamplePosition) / currentSampleRate;
-        readingProcessedBuffer.store (-1, std::memory_order_release);
+        processedBufferReaders[static_cast<size_t> (sourceIndex)].fetch_sub (1, std::memory_order_release);
     }
     // When the file audition transport is stopped, VST3 remains a pass-through
     // processor for host input. Live host-input editing is a separate integration step.
@@ -552,10 +554,10 @@ void VocalEditorAudioProcessor::updateProcessedBuffer()
     // The message thread is the only writer. Never overwrite the published
     // buffer or the buffer currently being read by processBlock().
     const int active = activeProcessedBuffer.load (std::memory_order_acquire);
-    const int reading = readingProcessedBuffer.load (std::memory_order_acquire);
     int targetIndex = -1;
     for (int i = 0; i < static_cast<int> (processedBuffers.size()); ++i)
-        if (i != active && i != reading)
+        if (i != active
+            && processedBufferReaders[static_cast<size_t> (i)].load (std::memory_order_acquire) == 0)
         {
             targetIndex = i;
             break;
