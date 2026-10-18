@@ -2,6 +2,8 @@ cmake_minimum_required(VERSION 3.22)
 
 project(VocalEditor VERSION 0.1.0)
 
+include(CTest)
+
 # Add JUCE as a subdirectory.
 if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/JUCE/CMakeLists.txt")
     add_subdirectory(JUCE)
@@ -68,3 +70,42 @@ target_link_libraries(VocalEditor
 )
 
 target_compile_features(VocalEditor PRIVATE cxx_std_17)
+
+if (BUILD_TESTING)
+    juce_add_console_app(VocalEditorTests
+        PRODUCT_NAME "Vocal Editor Tests"
+    )
+
+    juce_generate_juce_header(VocalEditorTests)
+
+    target_sources(VocalEditorTests
+        PRIVATE
+            Tests/VocalEventTests.cpp
+            Source/VocalEvent.h
+    )
+
+    target_include_directories(VocalEditorTests
+        PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR}/Source
+    )
+
+    target_compile_definitions(VocalEditorTests
+        PRIVATE
+            JUCE_WEB_BROWSER=0
+            JUCE_USE_CURL=0
+            JUCE_DISPLAY_SPLASH_SCREEN=0
+            JUCE_REPORT_APP_USAGE=0
+    )
+
+    target_link_libraries(VocalEditorTests
+        PRIVATE
+            juce::juce_core
+            juce::juce_audio_basics
+            juce::juce_recommended_config_flags
+            juce::juce_recommended_warning_flags
+    )
+
+    target_compile_features(VocalEditorTests PRIVATE cxx_std_17)
+
+    add_test(NAME VocalEventTests COMMAND VocalEditorTests)
+endif()
