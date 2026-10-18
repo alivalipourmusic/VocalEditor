@@ -200,3 +200,12 @@ ctest --test-dir build -C Release --output-on-failure
 - [ ] Stress transport and edits while the audio callback is running; confirm no glitches or unsafe buffer access.
 - [ ] Verify undo/redo for each supported edit.
 - [ ] Validate VST3 loading and operation in Cubase, plus standalone playback/export.
+
+
+## Phase 13 progress: stale buffer reclamation and shortcut cleanup
+
+- [x] Add message-thread cleanup for obsolete processed snapshots; the published snapshot and any reader-pinned snapshot are never resized or cleared.
+- [x] Run cleanup from the editor timer so loading a shorter file or clearing audio can release older, larger render buffers after publication moves to a new snapshot.
+- [x] Clear the render-retry-blocked flag when an empty snapshot is successfully published.
+- [x] Remove the duplicate Delete/Backspace shortcut branch and retain a fallback for the currently selected event when the multi-selection list is empty.
+- [ ] Compile and run the Windows build/tests and stress-test load/clear while playback is active; these changes are not runtime-verified here.
