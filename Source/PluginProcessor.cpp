@@ -1195,6 +1195,14 @@ void VocalEditorAudioProcessor::mergeEvents (const juce::Uuid& idA, const juce::
         || a->fadeOutMs > 1.0e-6 || b->fadeInMs > 1.0e-6)
         return;
 
+    // A single merged envelope cannot represent a discontinuity at the join.
+    // Refuse that merge instead of creating duplicate-time envelope points
+    // which later fail snapshot validation and break Redo.
+    const float leftBoundaryGain = a->getEnvelopeGainDb (1.0f);
+    const float rightBoundaryGain = b->getEnvelopeGainDb (0.0f);
+    if (std::abs (leftBoundaryGain - rightBoundaryGain) > 1.0e-4f)
+        return;
+
     const auto before = captureEventState();
     const double combinedStart = a->startTime;
     const double combinedEnd = b->endTime;
@@ -1213,18 +1221,29 @@ void VocalEditorAudioProcessor::mergeEvents (const juce::Uuid& idA, const juce::
             ? juce::Array<VocalEvent::EnvelopePoint>()
             : source.envelope;
 
+        auto addUnique = [&combinedEnvelope] (float t, float value)
+        {
+            t = juce::jlimit (0.0f, 1.0f, t);
+            if (! combinedEnvelope.isEmpty()
+                && std::abs (combinedEnvelope.getLast().t - t) <= 1.0e-6f)
+            {
+                combinedEnvelope.getReference (combinedEnvelope.size() - 1).gainDb = value;
+                return;
+            }
+            combinedEnvelope.add ({ t, value });
+        };
+
         if (points.isEmpty())
         {
-            combinedEnvelope.add ({ static_cast<float> ((sourceStart - combinedStart) / combinedLength), source.gainDb });
-            combinedEnvelope.add ({ static_cast<float> ((sourceEnd - combinedStart) / combinedLength), source.gainDb });
+            addUnique (static_cast<float> ((sourceStart - combinedStart) / combinedLength), source.gainDb);
+            addUnique (static_cast<float> ((sourceEnd - combinedStart) / combinedLength), source.gainDb);
         }
         else
         {
             for (const auto& point : points)
-                combinedEnvelope.add ({
+                addUnique (
                     static_cast<float> ((sourceStart + point.t * sourceLength - combinedStart) / combinedLength),
-                    point.gainDb
-                });
+                    point.gainDb);
         }
     };
 
