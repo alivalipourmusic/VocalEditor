@@ -1,0 +1,33 @@
+name: Windows build and regression tests
+
+on:
+  push:
+    branches:
+      - stabilization/phase-1-audit
+  pull_request:
+    branches:
+      - stabilization/phase-1-audit
+  workflow_dispatch:
+
+jobs:
+  build-and-test:
+    runs-on: windows-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up CMake
+        uses: lukka/get-cmake@latest
+
+      - name: Fetch JUCE 8.0.4
+        shell: pwsh
+        run: git clone --depth 1 --branch 8.0.4 https://github.com/juce-framework/JUCE.git JUCE
+
+      - name: Configure
+        run: cmake -S . -B build -G "Visual Studio 17 2022" -A x64
+
+      - name: Build plugin, standalone app, and tests
+        run: cmake --build build --config Release --parallel 4
+
+      - name: Run regression tests
+        run: ctest --test-dir build -C Release --output-on-failure
