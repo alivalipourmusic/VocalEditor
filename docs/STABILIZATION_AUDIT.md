@@ -49,6 +49,22 @@ The project currently has no dedicated test target visible in the inspected CMak
 7. Harden audio import/export and test failure paths.
 8. Run the JUCE/VST3 validator where available and perform manual Cubase/Standalone checks.
 
+## Phase 1 progress
+
+- [x] Extract envelope slicing into a reusable `VocalEvent::makeEnvelopeSlice` helper.
+- [x] Add regression tests for interpolated slice boundaries, split points at existing envelope points, flat envelopes, and invalid ranges.
+- [x] Add a CTest target so the regression executable can be run with `ctest`.
+- [x] Add a Windows GitHub Actions workflow to configure/build the plugin, standalone app, and tests.
+- [ ] Confirm the Windows workflow passes. A source commit or an empty status response is not proof of a successful build.
+- [ ] Add processor-level tests for `splitEvent` itself; current tests exercise the envelope slicing primitive directly.
+
+Run locally from the project root after CMake configuration/build:
+
+```powershell
+cmake --build build --config Release --parallel 4
+ctest --test-dir build -C Release --output-on-failure
+```
+
 ## Validation checklist
 
 - [ ] Configure and build Release on Windows with the documented Visual Studio/CMake setup.
