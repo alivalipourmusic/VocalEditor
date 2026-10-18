@@ -4,6 +4,7 @@
 
 #include <cmath>
 #include <iostream>
+#include <limits>
 
 namespace
 {
@@ -190,6 +191,22 @@ namespace
         }
     }
 
+    void testAudioAllocationPreflight()
+    {
+        check (VocalAudioMath::isReasonableAudioAllocation (2, 1000, 100000),
+               "allocation preflight accepts a small stereo buffer");
+        check (! VocalAudioMath::isReasonableAudioAllocation (0, 1000, 100000),
+               "allocation preflight rejects zero channels");
+        check (! VocalAudioMath::isReasonableAudioAllocation (2, 0, 100000),
+               "allocation preflight rejects empty audio");
+        check (! VocalAudioMath::isReasonableAudioAllocation (2, 1000, 1000),
+               "allocation preflight rejects a buffer over the configured byte limit");
+        check (! VocalAudioMath::isReasonableAudioAllocation (2,
+                    static_cast<juce::int64> (std::numeric_limits<int>::max()) + 1,
+                    std::numeric_limits<size_t>::max()),
+               "allocation preflight rejects sample counts beyond AudioBuffer index limits");
+    }
+
     void testTimelineValidation()
     {
         const std::vector<std::pair<double, double>> valid {
@@ -300,6 +317,7 @@ int main()
     testFadeEndpointsAndShortEvents();
     testIntervalOverlapRules();
     testTimelineValidation();
+    testAudioAllocationPreflight();
     testMergeEnvelopeBoundaryCompatibility();
     testSignalLevelGainAndFadeRendering();
 
