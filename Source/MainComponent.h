@@ -34,6 +34,7 @@ private:
     void openProjectButtonClicked();
     void saveProjectButtonClicked();
     void saveProjectToFile (const juce::File& file);
+    void exportAudioButtonClicked();
     void playButtonClicked();
     void stopButtonClicked();
     void zoomInClicked();
@@ -52,6 +53,7 @@ private:
     juce::TextButton openButton  { "Open Audio" };
     juce::TextButton openProjectButton { "Open Project" };
     juce::TextButton saveProjectButton { "Save Project" };
+    juce::TextButton exportAudioButton { "Export Audio" };
     juce::TextButton playButton  { "Play" };
     juce::TextButton stopButton  { "Stop" };
     juce::TextButton zoomInButton  { "+" };
