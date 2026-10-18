@@ -369,6 +369,7 @@ bool VocalEditorAudioProcessor::restoreStateFromXml (const juce::XmlElement& xml
 
     // Commit only after the XML and source audio have passed validation.
     audioBuffer = std::move (stagedAudio);
+    audioAvailable.store (audioBuffer.getNumSamples() > 0, std::memory_order_release);
     currentAudioFile = stagedAudioFile;
     currentSampleRate = stagedSampleRate;
     eventList.clear();
@@ -900,6 +901,7 @@ bool VocalEditorAudioProcessor::loadAudioFile (const juce::File& file, juce::Str
     // Commit only after opening, validation, allocation, and decoding succeed.
     stopPlayback();
     audioBuffer = std::move (stagedAudio);
+    audioAvailable.store (audioBuffer.getNumSamples() > 0, std::memory_order_release);
     currentAudioFile = file;
     currentSampleRate = reader->sampleRate;
     playbackPosition = 0.0;
@@ -920,6 +922,7 @@ bool VocalEditorAudioProcessor::loadAudioFile (const juce::File& file, juce::Str
 
 void VocalEditorAudioProcessor::clearAudio()
 {
+    audioAvailable.store (false, std::memory_order_release);
     audioBuffer.setSize (0, 0);
     playbackPosition = 0.0;
     playbackSamplePosition = 0;
