@@ -42,6 +42,29 @@ namespace VocalAudioMath
         return totalSamples * sizeof (float) <= maxBytes;
     }
 
+    // The editor can retain one source buffer plus three render snapshots.
+    // Bound the aggregate working set, not just one allocation in isolation.
+    inline bool isReasonableAudioWorkingSet (int channels,
+                                              juce::int64 samples,
+                                              size_t bufferCopies = 4,
+                                              size_t maxBytes = (size_t) 4 * 1024 * 1024 * 1024ULL) noexcept
+    {
+        if (bufferCopies == 0
+            || ! isReasonableAudioAllocation (channels, samples,
+                                               std::numeric_limits<size_t>::max()))
+            return false;
+
+        const auto channelCount = static_cast<size_t> (channels);
+        const auto sampleCount = static_cast<size_t> (samples);
+        const auto totalSamples = channelCount * sampleCount;
+        const auto bytesPerBuffer = totalSamples * sizeof (float);
+
+        if (bytesPerBuffer > std::numeric_limits<size_t>::max() / bufferCopies)
+            return false;
+
+        return bytesPerBuffer * bufferCopies <= maxBytes;
+    }
+
     inline bool isValidNonOverlappingTimeline (
         const std::vector<std::pair<double, double>>& intervals,
         double duration,
