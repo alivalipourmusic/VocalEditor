@@ -473,6 +473,19 @@ void MainComponent::timerCallback()
     // Sync timeline with waveform view
     timeline.setVisibleRange (waveform.getVisibleStartTime(), waveform.getVisibleEndTime());
 
+    // Reflect host-restored de-esser state without triggering another render.
+    if (! deEsserToggle.isMouseButtonDown())
+        deEsserToggle.setToggleState (processor.isDeEsserEnabled(), juce::dontSendNotification);
+    if (! deEsserFrequencySlider.isMouseButtonDown()
+        && std::abs (deEsserFrequencySlider.getValue() - processor.getDeEsserFrequency()) > 1.0)
+        deEsserFrequencySlider.setValue (processor.getDeEsserFrequency(), juce::dontSendNotification);
+    if (! deEsserThresholdSlider.isMouseButtonDown()
+        && std::abs (deEsserThresholdSlider.getValue() - processor.getDeEsserThreshold()) > 0.1)
+        deEsserThresholdSlider.setValue (processor.getDeEsserThreshold(), juce::dontSendNotification);
+    if (! deEsserReductionSlider.isMouseButtonDown()
+        && std::abs (deEsserReductionSlider.getValue() - processor.getDeEsserMaxReduction()) > 0.1)
+        deEsserReductionSlider.setValue (processor.getDeEsserMaxReduction(), juce::dontSendNotification);
+
     // Update play button text
     playButton.setButtonText (processor.isPlaying() ? "Pause" : "Play");
 }
