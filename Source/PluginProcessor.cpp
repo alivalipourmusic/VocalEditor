@@ -579,13 +579,21 @@ void VocalEditorAudioProcessor::updateProcessedBuffer()
         }
 
     if (targetIndex < 0)
+    {
+        // Preserve the edit request. The editor timer retries after a reader
+        // releases a snapshot, rather than silently leaving stale rendered audio.
+        processedBufferUpdatePending.store (true, std::memory_order_release);
         return;
+    }
 
     auto& target = processedBuffers[static_cast<size_t> (targetIndex)];
     if (audioBuffer.getNumSamples() <= 0 || audioBuffer.getNumChannels() <= 0)
     {
         target.setSize (0, 0);
+        processedBufferSampleRates[static_cast<size_t> (targetIndex)] =
+            currentSampleRate.load (std::memory_order_acquire);
         activeProcessedBuffer.store (targetIndex, std::memory_order_release);
+        processedBufferUpdatePending.store (false, std::memory_order_release);
         return;
     }
 
@@ -598,6 +606,7 @@ void VocalEditorAudioProcessor::updateProcessedBuffer()
     processedBufferSampleRates[static_cast<size_t> (targetIndex)] =
         currentSampleRate.load (std::memory_order_acquire);
     activeProcessedBuffer.store (targetIndex, std::memory_order_release);
+    processedBufferUpdatePending.store (false, std::memory_order_release);
 }
 
 bool VocalEditorAudioProcessor::exportProcessedAudio (const juce::File& file, juce::String& errorMessage)
@@ -610,6 +619,13 @@ bool VocalEditorAudioProcessor::exportProcessedAudio (const juce::File& file, ju
 
     if (! hasAudio() || currentSampleRate <= 0.0)
         return fail ("Load an audio file before exporting.");
+
+    if (processedBufferUpdatePending.load (std::memory_order_acquire))
+    {
+        updateProcessedBuffer();
+        if (processedBufferUpdatePending.load (std::memory_order_acquire))
+            return fail ("The processed audio is busy. Retry export in a moment; no stale render was exported.");
+    }
 
     if (file == juce::File() || file.isDirectory())
         return fail ("Choose a valid output file.");
