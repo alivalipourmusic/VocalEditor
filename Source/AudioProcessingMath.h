@@ -142,6 +142,37 @@ namespace VocalAudioMath
         return juce::jlimit (0, maxSamples, static_cast<int> (std::round (samples)));
     }
 
+    // Smoothly ramps an additional word-level gain offset at each event edge.
+    // A zero transition disables that edge ramp; Smooth uses a cubic S-curve.
+    inline float dynamicGainWindowAtSample (int localSample, int eventLength,
+                                            int transitionInSamples,
+                                            int transitionOutSamples) noexcept
+    {
+        if (eventLength <= 0 || localSample < 0 || localSample >= eventLength)
+            return 0.0f;
+
+        double window = 1.0;
+        transitionInSamples = juce::jlimit (0, eventLength, transitionInSamples);
+        transitionOutSamples = juce::jlimit (0, eventLength, transitionOutSamples);
+
+        if (transitionInSamples > 0 && localSample < transitionInSamples)
+        {
+            const double progress = transitionInSamples <= 1 ? 0.0
+                : static_cast<double> (localSample) / (transitionInSamples - 1);
+            window = juce::jmin (window, fadeCurveValue (progress, VocalEvent::FadeCurve::Smooth));
+        }
+
+        if (transitionOutSamples > 0 && localSample >= eventLength - transitionOutSamples)
+        {
+            const int remaining = eventLength - 1 - localSample;
+            const double progress = transitionOutSamples <= 1 ? 0.0
+                : static_cast<double> (remaining) / (transitionOutSamples - 1);
+            window = juce::jmin (window, fadeCurveValue (progress, VocalEvent::FadeCurve::Smooth));
+        }
+
+        return static_cast<float> (window);
+    }
+
     inline int clampFadeSamples (int requestedSamples, int eventLength) noexcept
     {
         return juce::jlimit (0, juce::jmax (0, eventLength), requestedSamples);
@@ -227,7 +258,11 @@ namespace VocalAudioMath
         {
             const double t = length > 1 ? static_cast<double> (i) / (length - 1) : 0.0;
             const float envelopeDb = event.getEnvelopeGainDb (static_cast<float> (t));
-            const float gain = juce::Decibels::decibelsToGain (envelopeDb);
+            const int transitionIn = millisecondsToSamplesClamped (event.gainTransitionInMs, sampleRate, length);
+            const int transitionOut = millisecondsToSamplesClamped (event.gainTransitionOutMs, sampleRate, length);
+            const float dynamicWindow = dynamicGainWindowAtSample (i, length, transitionIn, transitionOut);
+            const float gain = juce::Decibels::decibelsToGain (
+                envelopeDb + event.dynamicGainDb * dynamicWindow);
             const float fade = fadeGainAtSample (i, length, fadeIn, fadeOut,
                                                   event.fadeInCurve, event.fadeOutCurve);
             const double scale = static_cast<double> (gain) * fade;
@@ -275,7 +310,14 @@ namespace VocalAudioMath
             const float envelopeDb = event.envelope.isEmpty()
                 ? event.gainDb
                 : event.getEnvelopeGainDb (static_cast<float> (normalized));
-            const float gain = juce::Decibels::decibelsToGain (envelopeDb);
+            const int transitionInSamples = millisecondsToSamplesClamped (
+                event.gainTransitionInMs, sampleRate, eventLength);
+            const int transitionOutSamples = millisecondsToSamplesClamped (
+                event.gainTransitionOutMs, sampleRate, eventLength);
+            const float dynamicWindow = dynamicGainWindowAtSample (
+                localSample, eventLength, transitionInSamples, transitionOutSamples);
+            const float gain = juce::Decibels::decibelsToGain (
+                envelopeDb + event.dynamicGainDb * dynamicWindow);
             const float fadeGain = fadeGainAtSample (
                 localSample, eventLength, fadeInSamples, fadeOutSamples,
                 event.fadeInCurve, event.fadeOutCurve);
