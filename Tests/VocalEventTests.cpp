@@ -95,6 +95,18 @@ namespace
                "invalid channels return silence");
     }
 
+    void testIntervalOverlapRules()
+    {
+        check (VocalAudioMath::intervalsOverlap (0.0, 1.0, 0.5, 1.5),
+               "intersecting event intervals are detected");
+        check (! VocalAudioMath::intervalsOverlap (0.0, 1.0, 1.0, 2.0),
+               "touching event boundaries are allowed");
+        check (! VocalAudioMath::intervalsOverlap (0.0, 1.0, 1.00001, 2.0),
+               "separated intervals do not overlap");
+        check (! VocalAudioMath::intervalsOverlap (0.0, 0.0, 0.0, 1.0),
+               "zero-length intervals are invalid and do not overlap");
+    }
+
     void testFadeEndpointsAndShortEvents()
     {
         int fadeIn = 8, fadeOut = 8;
@@ -158,6 +170,7 @@ int main()
     testSampleRateMappingAcrossRates();
     testLinearInterpolation();
     testFadeEndpointsAndShortEvents();
+    testIntervalOverlapRules();
 
     if (failures == 0)
     {
