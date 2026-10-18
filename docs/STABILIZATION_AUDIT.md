@@ -53,6 +53,17 @@ The project currently has no dedicated test target visible in the inspected CMak
 - [ ] Linear interpolation is a baseline, not a band-limited production resampler. Downsampling can alias; replace with a quality resampler and add frequency-response tests before release.
 - [ ] Verify transport start/stop, seek, end-of-file, mono/stereo conversion, and host sample-rate changes in Standalone and Cubase.
 
+## Phase 6 progress: audio processing edge cases
+
+- [x] Extract fade math into a dedicated helper and make fade-in/fade-out reach exact silence at their final endpoint, including one-sample fades.
+- [x] Fit overlapping fade lengths proportionally within very short events to prevent negative or out-of-range fade windows.
+- [x] Add tests for fade endpoints, single-sample regions, and interval overlap semantics.
+- [x] Reject new manual event regions that overlap existing events, because the current processor multiplies their gains if they overlap.
+- [ ] Existing projects or Auto Segment may still contain overlaps; add project validation and Auto Segment overlap tests.
+- [ ] Compile and run the test target. No test result is claimed yet.
+- [ ] Review fade curve behavior at very short lengths and compare against a reference implementation.
+- [ ] Add signal-level tests that render a known waveform and verify measured output RMS/peak against expected gain and fade values.
+
 ## Status clarification
 
 Earlier sections describe findings from the initial audit snapshot. Since then, state serialization, safer staged import, event snapshot undo actions, processed audio export, and the sample-rate separation above have been added on this branch. The outstanding items in the validation checklist remain unverified until a real build and tests run.
