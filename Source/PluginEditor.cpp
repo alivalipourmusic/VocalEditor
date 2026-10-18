@@ -10,9 +10,9 @@ VocalEditorAudioProcessorEditor::VocalEditorAudioProcessorEditor (VocalEditorAud
     addAndMakeVisible (mainComponent);
 
     // Default size - professional starting point
-    setSize (1100, 620);
+    setSize (1440, 900);
     setResizable (true, true);
-    setResizeLimits (800, 400, 4096, 2160);
+    setResizeLimits (1000, 650, 4096, 2160);
 }
 
 VocalEditorAudioProcessorEditor::~VocalEditorAudioProcessorEditor()
