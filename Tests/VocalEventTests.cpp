@@ -121,6 +121,21 @@ namespace
         check (near (audio.getSample (0, end), 0.5f),
                "samples after the event remain untouched");
 
+        double sumSquares = 0.0;
+        float measuredPeak = 0.0f;
+        for (int i = start + 100; i < end - 100; ++i)
+        {
+            const float value = audio.getSample (0, i);
+            sumSquares += static_cast<double> (value) * value;
+            measuredPeak = juce::jmax (measuredPeak, std::abs (value));
+        }
+        const float measuredRms = static_cast<float> (
+            std::sqrt (sumSquares / static_cast<double> (end - start - 200)));
+        check (near (measuredRms, 0.5f * expectedGain),
+               "measured RMS matches the expected -6 dB gain");
+        check (near (measuredPeak, 0.5f * expectedGain),
+               "measured peak matches the expected -6 dB gain for a constant signal");
+
         juce::AudioBuffer<float> faded (1, numSamples);
         for (int i = 0; i < numSamples; ++i)
             faded.setSample (0, i, 0.5f);
