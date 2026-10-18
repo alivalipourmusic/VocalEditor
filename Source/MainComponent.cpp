@@ -504,8 +504,12 @@ bool MainComponent::keyPressed (const juce::KeyPress& key, juce::Component* orig
     }
     if (code == juce::KeyPress::deleteKey || code == juce::KeyPress::backspaceKey)
     {
-        processor.deleteSelectedEvents();
+        if (processor.getNumSelectedEvents() > 0)
+            processor.deleteSelectedEvents();
+        else if (auto* event = processor.getSelectedEvent())
+            processor.deleteEvent (event->id);
         waveform.repaint();
+        timeline.repaint();
         eventPanel.repaint();
         return true;
     }
@@ -534,20 +538,6 @@ bool MainComponent::keyPressed (const juce::KeyPress& key, juce::Component* orig
         saveProjectButtonClicked();
         return true;
     }
-    if (code == juce::KeyPress::deleteKey || code == juce::KeyPress::backspaceKey)
-    {
-        if (processor.getNumSelectedEvents() > 0)
-        {
-            const auto selectedIds = processor.getSelectedEventIds();
-            for (const auto& id : selectedIds)
-                processor.deleteEvent (id);
-        }
-        else if (auto* event = processor.getSelectedEvent())
-            processor.deleteEvent (event->id);
-        waveform.repaint();
-        eventPanel.repaint();
-        return true;
-    }
     if (! command && ! key.getModifiers().isAltDown() && code == 'S')
     {
         if (auto* event = processor.getSelectedEvent())
@@ -570,6 +560,7 @@ void MainComponent::timerCallback()
     // were briefly pinned by the audio callback or an export operation.
     if (processor.shouldRetryProcessedBufferUpdate())
         processor.updateProcessedBuffer();
+    processor.reclaimUnusedProcessedBufferMemory();
 
     // Update time display
     double pos = processor.getPlaybackPosition();
