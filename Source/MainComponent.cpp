@@ -19,6 +19,8 @@ MainComponent::MainComponent (VocalEditorAudioProcessor& p)
 
     // Buttons
     openButton.onClick = [this] { openButtonClicked(); };
+    openProjectButton.onClick = [this] { openProjectButtonClicked(); };
+    saveProjectButton.onClick = [this] { saveProjectButtonClicked(); };
     playButton.onClick = [this] { playButtonClicked(); };
     stopButton.onClick = [this] { stopButtonClicked(); };
     zoomInButton.onClick = [this] { zoomInClicked(); };
@@ -30,7 +32,7 @@ MainComponent::MainComponent (VocalEditorAudioProcessor& p)
     autoSegmentButton.onClick = [this] { autoSegmentClicked(); };
     levelProcessButton.onClick = [this] { levelProcessClicked(); };
 
-    for (auto* btn : { &openButton, &playButton, &stopButton, 
+    for (auto* btn : { &openButton, &openProjectButton, &saveProjectButton, &playButton, &stopButton, 
                        &zoomInButton, &zoomOutButton, &zoomFitButton })
     {
         btn->setColour (juce::TextButton::buttonColourId, panelColour);
@@ -141,9 +143,13 @@ void MainComponent::resized()
     titleLabel.setBounds (topBar.removeFromLeft (160));
     topBar.removeFromLeft (12);
 
-    openButton.setBounds (topBar.removeFromLeft (70));
+    openButton.setBounds (topBar.removeFromLeft (78));
+    topBar.removeFromLeft (4);
+    openProjectButton.setBounds (topBar.removeFromLeft (92));
+    topBar.removeFromLeft (4);
+    saveProjectButton.setBounds (topBar.removeFromLeft (88));
     topBar.removeFromLeft (6);
-    playButton.setBounds (topBar.removeFromLeft (60));
+    playButton.setBounds (topBar.removeFromLeft (52));
     topBar.removeFromLeft (4);
     stopButton.setBounds (topBar.removeFromLeft (60));
     topBar.removeFromLeft (16);
@@ -252,6 +258,84 @@ void MainComponent::openButtonClicked()
         if (file.existsAsFile())
             loadFile (file);
     });
+}
+
+void MainComponent::openProjectButtonClicked()
+{
+    auto chooser = std::make_shared<juce::FileChooser> (
+        "Open Vocal Editor project...",
+        processor.getCurrentProjectFile(),
+        "*.vocalproj");
+
+    chooser->launchAsync (juce::FileBrowserComponent::openMode
+                              | juce::FileBrowserComponent::canSelectFiles,
+                          [this, chooser] (const juce::FileChooser& fc)
+    {
+        const auto file = fc.getResult();
+        if (! file.existsAsFile())
+            return;
+
+        juce::String error;
+        if (! processor.loadProject (file, error))
+        {
+            statusLabel.setText ("Project load failed: " + error, juce::dontSendNotification);
+            return;
+        }
+
+        waveform.audioFileLoaded();
+        if (processor.hasAudio())
+        {
+            const double duration = processor.getDuration();
+            timeline.setTotalDuration (duration);
+            timeline.setVisibleRange (0.0, duration);
+        }
+        else
+        {
+            timeline.setTotalDuration (0.0);
+            timeline.setVisibleRange (0.0, 1.0);
+        }
+
+        waveform.repaint();
+        eventPanel.repaint();
+        statusLabel.setText ("Project loaded: " + file.getFileName(), juce::dontSendNotification);
+    });
+}
+
+void MainComponent::saveProjectButtonClicked()
+{
+    const auto current = processor.getCurrentProjectFile();
+    if (current != juce::File() && current.getParentDirectory().exists())
+    {
+        saveProjectToFile (current);
+        return;
+    }
+
+    auto chooser = std::make_shared<juce::FileChooser> (
+        "Save Vocal Editor project...",
+        juce::File::getSpecialLocation (juce::File::userDocumentsDirectory)
+            .getChildFile ("Untitled.vocalproj"),
+        "*.vocalproj");
+
+    chooser->launchAsync (juce::FileBrowserComponent::saveMode
+                              | juce::FileBrowserComponent::canSelectFiles
+                              | juce::FileBrowserComponent::warnAboutOverwriting,
+                          [this, chooser] (const juce::FileChooser& fc)
+    {
+        auto file = fc.getResult();
+        if (file == juce::File())
+            return;
+        if (! file.hasFileExtension ("vocalproj"))
+            file = file.withFileExtension ("vocalproj");
+        saveProjectToFile (file);
+    });
+}
+
+void MainComponent::saveProjectToFile (const juce::File& file)
+{
+    if (processor.saveProject (file))
+        statusLabel.setText ("Project saved: " + file.getFileName(), juce::dontSendNotification);
+    else
+        statusLabel.setText ("Could not save project file.", juce::dontSendNotification);
 }
 
 void MainComponent::playButtonClicked()
@@ -386,6 +470,16 @@ bool MainComponent::keyPressed (const juce::KeyPress& key, juce::Component* orig
     if (command && code == 'O')
     {
         openButtonClicked();
+        return true;
+    }
+    if (command && shift && code == 'O')
+    {
+        openProjectButtonClicked();
+        return true;
+    }
+    if (command && code == 'S')
+    {
+        saveProjectButtonClicked();
         return true;
     }
     if (code == juce::KeyPress::deleteKey || code == juce::KeyPress::backspaceKey)
