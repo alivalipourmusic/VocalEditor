@@ -219,3 +219,12 @@ ctest --test-dir build -C Release --output-on-failure
 - [x] Use rendered RMS for Level Process target matching; custom automation is now measured as heard instead of assuming the base gain field controls it.
 - [x] Add regression coverage for constant event gain, custom envelope gain, and fade attenuation.
 - [ ] Build and run CTest on Windows. The source and tests are committed, but no successful compile/runtime result is claimed until CI or a local build confirms it.
+
+
+## Phase 15 progress: Undo correctness and project-state validation
+
+- [x] Fix JUCE 8 audio export writer creation to use the supported stream-pointer API while preserving stream ownership if writer creation fails.
+- [x] Fix UndoManager usage: the previous implementation passed an integer where JUCE expects a transaction name, which blocked compilation.
+- [x] Use named transactions and coalesce rapid gain/fade edits into one undoable gesture within the configured time window; reset coalescing state when project history is cleared.
+- [x] Reject non-finite or invalid playback/selection positions during project-state restoration before changing the live session.
+- [ ] Await Windows CI build and regression test results. The prior runner/configuration failure is fixed; the first actual compile exposed API mismatches which are now corrected, but a successful build is not yet confirmed.
