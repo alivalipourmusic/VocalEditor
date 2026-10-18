@@ -129,6 +129,19 @@ namespace VocalAudioMath
         return curve == VocalEvent::FadeCurve::Smooth ? x * x * (3.0 - 2.0 * x) : x;
     }
 
+    inline int millisecondsToSamplesClamped (double milliseconds, double sampleRate,
+                                               int maxSamples) noexcept
+    {
+        if (maxSamples <= 0 || ! std::isfinite (milliseconds) || milliseconds <= 0.0
+            || ! std::isfinite (sampleRate) || sampleRate <= 0.0)
+            return 0;
+
+        const double samples = milliseconds * 0.001 * sampleRate;
+        if (! std::isfinite (samples) || samples >= static_cast<double> (maxSamples))
+            return maxSamples;
+        return juce::jlimit (0, maxSamples, static_cast<int> (std::round (samples)));
+    }
+
     inline int clampFadeSamples (int requestedSamples, int eventLength) noexcept
     {
         return juce::jlimit (0, juce::jmax (0, eventLength), requestedSamples);
@@ -201,8 +214,8 @@ namespace VocalAudioMath
         if (length <= 0)
             return 0.0;
 
-        int fadeIn = static_cast<int> (std::round (event.fadeInMs * 0.001 * sampleRate));
-        int fadeOut = static_cast<int> (std::round (event.fadeOutMs * 0.001 * sampleRate));
+        int fadeIn = millisecondsToSamplesClamped (event.fadeInMs, sampleRate, length);
+        int fadeOut = millisecondsToSamplesClamped (event.fadeOutMs, sampleRate, length);
         fitFadesToEvent (length, fadeIn, fadeOut);
 
         double sumSquares = 0.0;
@@ -246,8 +259,8 @@ namespace VocalAudioMath
         if (eventLength <= 0)
             return;
 
-        int fadeInSamples = static_cast<int> (std::round (event.fadeInMs * 0.001 * sampleRate));
-        int fadeOutSamples = static_cast<int> (std::round (event.fadeOutMs * 0.001 * sampleRate));
+        int fadeInSamples = millisecondsToSamplesClamped (event.fadeInMs, sampleRate, eventLength);
+        int fadeOutSamples = millisecondsToSamplesClamped (event.fadeOutMs, sampleRate, eventLength);
         fitFadesToEvent (eventLength, fadeInSamples, fadeOutSamples);
 
         for (int sample = startSample; sample < endSample; ++sample)
