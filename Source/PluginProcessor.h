@@ -144,6 +144,13 @@ public:
     float getNoiseReductionAmount() const { return noiseReductionAmountDb; }
     float getNoiseReductionRelease() const { return noiseReductionReleaseMs; }
 
+    void setRoomTailReductionEnabled (bool enabled);
+    bool isRoomTailReductionEnabled() const { return roomTailReductionEnabled; }
+    void setRoomTailReductionParameters (float thresholdDb, float maxReductionDb, float tailSensitivity);
+    float getRoomTailThreshold() const { return roomTailThresholdDb; }
+    float getRoomTailMaxReduction() const { return roomTailMaxReductionDb; }
+    float getRoomTailSensitivity() const { return roomTailSensitivity; }
+
 private:
     juce::AudioFormatManager formatManager;
     juce::AudioThumbnailCache thumbnailCache { 5 };
@@ -187,10 +194,16 @@ private:
     float noiseReductionAmountDb = 18.0f;
     float noiseReductionReleaseMs = 180.0f;
 
+    bool roomTailReductionEnabled = false;
+    float roomTailThresholdDb = -36.0f;
+    float roomTailMaxReductionDb = 8.0f;
+    float roomTailSensitivity = 0.65f;
+
     void applyEventToBuffer (const VocalEvent& e, juce::AudioBuffer<float>& buffer);
     void applyDeEsserToBuffer (juce::AudioBuffer<float>& buffer);
     void applyDePlosiveToBuffer (juce::AudioBuffer<float>& buffer);
     void applyNoiseReductionToBuffer (juce::AudioBuffer<float>& buffer);
+    void applyRoomTailReductionToBuffer (juce::AudioBuffer<float>& buffer);
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (VocalEditorAudioProcessor)
 };
