@@ -35,6 +35,7 @@ target_sources(VocalEditor
     PRIVATE
         Source/VocalEvent.h
         Source/AudioResampling.h
+        Source/AudioProcessingMath.h
         Source/PluginProcessor.cpp
         Source/PluginProcessor.h
         Source/PluginEditor.cpp
@@ -84,6 +85,7 @@ if (BUILD_TESTING)
             Tests/VocalEventTests.cpp
             Source/VocalEvent.h
             Source/AudioResampling.h
+            Source/AudioProcessingMath.h
     )
 
     target_include_directories(VocalEditorTests
