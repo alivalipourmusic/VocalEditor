@@ -907,7 +907,15 @@ public:
     {
     }
 
-    bool perform() override { return processor.restoreEventState (after); }
+    bool perform() override
+    {
+        if (firstPerform)
+        {
+            firstPerform = false;
+            return true;
+        }
+        return processor.restoreEventState (after);
+    }
     bool undo() override { return processor.restoreEventState (before); }
     int getSizeInUnits() override { return before.toString().length() + after.toString().length(); }
 
@@ -916,6 +924,7 @@ private:
     juce::XmlElement before;
     juce::XmlElement after;
     juce::String actionName;
+    bool firstPerform = true;
 };
 
 void VocalEditorAudioProcessor::recordEventUndo (const juce::XmlElement& before,
@@ -940,9 +949,11 @@ VocalEvent* VocalEditorAudioProcessor::createEventFromSelection (VocalEvent::Typ
     if (end - start < 0.005)
         return nullptr;
 
+    const auto before = captureEventState();
     auto* event = eventList.add (start, end, type);
     setSelectedEvent (event);
     updateProcessedBuffer();
+    recordEventUndo (before, "Create Event");
     return event;
 }
 
@@ -950,6 +961,9 @@ void VocalEditorAudioProcessor::setEventGain (const juce::Uuid& id, float gainDb
 {
     if (auto* event = eventList.getById (id))
     {
+        if (event->locked)
+            return;
+        const auto before = captureEventState();
         const float newGainDb = juce::jlimit (-96.0f, 24.0f, gainDb);
         const float deltaDb = newGainDb - event->gainDb;
         event->gainDb = newGainDb;
@@ -960,6 +974,7 @@ void VocalEditorAudioProcessor::setEventGain (const juce::Uuid& id, float gainDb
             point.gainDb = juce::jlimit (-120.0f, 24.0f, point.gainDb + deltaDb);
 
         updateProcessedBuffer();
+        recordEventUndo (before, "Change Event Gain", 300);
     }
 }
 
@@ -967,10 +982,14 @@ void VocalEditorAudioProcessor::setEventFades (const juce::Uuid& id, double fade
 {
     if (auto* event = eventList.getById (id))
     {
+        if (event->locked)
+            return;
+        const auto before = captureEventState();
         const double maxFadeMs = event->getLength() * 500.0;
         event->fadeInMs = juce::jlimit (0.0, maxFadeMs, fadeInMs);
         event->fadeOutMs = juce::jlimit (0.0, maxFadeMs, fadeOutMs);
         updateProcessedBuffer();
+        recordEventUndo (before, "Change Event Fades", 300);
     }
 }
 
@@ -988,6 +1007,7 @@ void VocalEditorAudioProcessor::splitEvent (const juce::Uuid& id, double splitTi
     if (event == nullptr || event->locked)
         return;
 
+    const auto before = captureEventState();
     const double split = juce::jlimit (event->startTime, event->endTime, splitTime);
     const double originalStart = event->startTime;
     const double originalEnd = event->endTime;
@@ -1031,15 +1051,21 @@ void VocalEditorAudioProcessor::splitEvent (const juce::Uuid& id, double splitTi
 
     setSelectedEvent (event);
     updateProcessedBuffer();
+    recordEventUndo (before, "Split Event");
 }
 
 void VocalEditorAudioProcessor::deleteEvent (const juce::Uuid& id)
 {
+    auto* event = eventList.getById (id);
+    if (event == nullptr || event->locked)
+        return;
+    const auto before = captureEventState();
     if (selectedEvent != nullptr && selectedEvent->id == id)
         selectedEvent = nullptr;
     selectedEventIds.removeAllInstancesOf (id);
     eventList.removeById (id);
     updateProcessedBuffer();
+    recordEventUndo (before, "Delete Event");
 }
 
 bool VocalEditorAudioProcessor::loadAudioFile (const juce::File& file, juce::String* errorMessage)
