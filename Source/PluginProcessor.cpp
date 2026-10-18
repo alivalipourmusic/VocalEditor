@@ -598,8 +598,8 @@ void VocalEditorAudioProcessor::updateProcessedBuffer()
 
     if (targetIndex < 0)
     {
-        // Preserve the edit request. The editor timer retries after a reader
-        // releases a snapshot, rather than silently leaving stale rendered audio.
+        // Temporary reader contention is safe to retry from the editor timer.
+        processedBufferUpdateRetryBlocked.store (false, std::memory_order_release);
         processedBufferUpdatePending.store (true, std::memory_order_release);
         return;
     }
@@ -622,6 +622,7 @@ void VocalEditorAudioProcessor::updateProcessedBuffer()
         || ! VocalAudioMath::isReasonableAudioWorkingSet (audioBuffer.getNumChannels(),
                                                            audioBuffer.getNumSamples()))
     {
+        processedBufferUpdateRetryBlocked.store (true, std::memory_order_release);
         processedBufferUpdatePending.store (true, std::memory_order_release);
         return;
     }
@@ -636,8 +637,9 @@ void VocalEditorAudioProcessor::updateProcessedBuffer()
     }
     catch (const std::bad_alloc&)
     {
-        // targetIndex is not published, so the previous active render remains
-        // valid. Leave the update pending instead of exposing a partial render.
+        // Keep the previous snapshot valid and wait for an explicit retry; do not
+        // spin on repeated large allocations from the 15 ms UI timer.
+        processedBufferUpdateRetryBlocked.store (true, std::memory_order_release);
         processedBufferUpdatePending.store (true, std::memory_order_release);
         return;
     }
@@ -645,6 +647,7 @@ void VocalEditorAudioProcessor::updateProcessedBuffer()
     processedBufferSampleRates[static_cast<size_t> (targetIndex)] =
         currentSampleRate.load (std::memory_order_acquire);
     activeProcessedBuffer.store (targetIndex, std::memory_order_release);
+    processedBufferUpdateRetryBlocked.store (false, std::memory_order_release);
     processedBufferUpdatePending.store (false, std::memory_order_release);
 }
 
