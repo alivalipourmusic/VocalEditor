@@ -154,6 +154,9 @@ private:
 
     std::unique_ptr<juce::XmlElement> createStateXml() const;
     bool restoreStateFromXml (const juce::XmlElement& xml, juce::String& errorMessage);
+    juce::XmlElement captureEventState() const;
+    bool restoreEventState (const juce::XmlElement& xml);
+    void recordEventUndo (const juce::XmlElement& before, const juce::String& actionName, int coalesceMs = 0);
 
     void applyEventToBuffer (const VocalEvent& e, juce::AudioBuffer<float>& buffer);
 
