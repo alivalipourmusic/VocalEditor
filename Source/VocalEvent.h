@@ -83,6 +83,40 @@ struct VocalEvent
         return gainDb;
     }
 
+    // Returns a copy of the envelope over [from, to], with point times
+    // remapped to [0, 1]. Boundary values are interpolated from the original curve.
+    juce::Array<EnvelopePoint> makeEnvelopeSlice (float from, float to) const
+    {
+        from = juce::jlimit (0.0f, 1.0f, from);
+        to = juce::jlimit (0.0f, 1.0f, to);
+
+        juce::Array<EnvelopePoint> slice;
+        const float span = to - from;
+        if (span <= 0.0f)
+            return slice;
+
+        auto addPoint = [&slice] (float t, float valueDb)
+        {
+            t = juce::jlimit (0.0f, 1.0f, t);
+            if (! slice.isEmpty()
+                && std::abs (slice.getLast().t - t) < 1.0e-6f)
+            {
+                slice.getReference (slice.size() - 1).gainDb = valueDb;
+                return;
+            }
+            slice.add ({ t, valueDb });
+        };
+
+        addPoint (0.0f, getEnvelopeGainDb (from));
+        for (const auto& point : envelope)
+        {
+            if (point.t > from + 1.0e-6f && point.t < to - 1.0e-6f)
+                addPoint ((point.t - from) / span, point.gainDb);
+        }
+        addPoint (1.0f, getEnvelopeGainDb (to));
+        return slice;
+    }
+
     int addOrUpdateEnvelopePoint (float t, float gDb)
     {
         t = juce::jlimit (0.0f, 1.0f, t);
