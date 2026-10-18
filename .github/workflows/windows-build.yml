@@ -9,6 +9,10 @@ on:
       - stabilization/phase-1-audit
   workflow_dispatch:
 
+concurrency:
+  group: windows-build-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build-and-test:
     runs-on: windows-2022
