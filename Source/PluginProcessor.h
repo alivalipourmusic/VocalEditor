@@ -130,6 +130,13 @@ public:
     float getDeEsserThreshold() const { return deEsserThresholdDb; }
     float getDeEsserMaxReduction() const { return deEsserMaxReductionDb; }
 
+    void setDePlosiveEnabled (bool enabled);
+    bool isDePlosiveEnabled() const { return dePlosiveEnabled; }
+    void setDePlosiveParameters (float cutoffHz, float thresholdDb, float maxReductionDb);
+    float getDePlosiveCutoff() const { return dePlosiveCutoffHz; }
+    float getDePlosiveThreshold() const { return dePlosiveThresholdDb; }
+    float getDePlosiveMaxReduction() const { return dePlosiveMaxReductionDb; }
+
 private:
     juce::AudioFormatManager formatManager;
     juce::AudioThumbnailCache thumbnailCache { 5 };
@@ -163,8 +170,14 @@ private:
     float deEsserThresholdDb = -28.0f;
     float deEsserMaxReductionDb = 6.0f;
 
+    bool dePlosiveEnabled = false;
+    float dePlosiveCutoffHz = 140.0f;
+    float dePlosiveThresholdDb = -24.0f;
+    float dePlosiveMaxReductionDb = 9.0f;
+
     void applyEventToBuffer (const VocalEvent& e, juce::AudioBuffer<float>& buffer);
     void applyDeEsserToBuffer (juce::AudioBuffer<float>& buffer);
+    void applyDePlosiveToBuffer (juce::AudioBuffer<float>& buffer);
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (VocalEditorAudioProcessor)
 };
