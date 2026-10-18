@@ -47,6 +47,7 @@ private:
     void noiseReductionChanged();
     void roomTailReductionChanged();
     void spectralBalanceChanged();
+    void comparisonButtonClicked();
 
     VocalEditorAudioProcessor& processor;
 
@@ -57,6 +58,7 @@ private:
     juce::TextButton zoomInButton  { "+" };
     juce::TextButton zoomOutButton { "-" };
     juce::TextButton zoomFitButton { "Fit" };
+    juce::TextButton comparisonButton { "FX: ON" };
 
     // Phase 2
     juce::TextButton createEventButton { "Create Event" };
