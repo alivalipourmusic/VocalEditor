@@ -152,7 +152,8 @@ void VocalEditorAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, 
     const int sourceChannels = source.getNumChannels();
     const int outputSamples = buffer.getNumSamples();
     const int outputChannels = buffer.getNumChannels();
-    const double sourceRate = currentSampleRate.load (std::memory_order_acquire);
+    // Read metadata only after pinning and validating the immutable snapshot.
+    const double sourceRate = processedBufferSampleRates[static_cast<size_t> (sourceIndex)];
     const double outputRate = hostOutputSampleRate.load (std::memory_order_acquire);
     const double startSeconds = playbackPosition.load (std::memory_order_acquire);
 
@@ -594,6 +595,8 @@ void VocalEditorAudioProcessor::updateProcessedBuffer()
         if (event != nullptr)
             applyEventToBuffer (*event, target);
 
+    processedBufferSampleRates[static_cast<size_t> (targetIndex)] =
+        currentSampleRate.load (std::memory_order_acquire);
     activeProcessedBuffer.store (targetIndex, std::memory_order_release);
 }
 
