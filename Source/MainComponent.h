@@ -4,11 +4,10 @@
 #include "PluginProcessor.h"
 #include "WaveformComponent.h"
 #include "TimelineComponent.h"
+#include "SelectedEventPanel.h"
 
 //==============================================================================
-/**
-    Main content area: toolbar + timeline + waveform + transport + Phase 2 controls
-*/
+/** Main content area: transport, timeline, waveform and a dedicated event inspector. */
 class MainComponent : public juce::Component,
                       public juce::FileDragAndDropTarget,
                       private juce::Timer
@@ -22,7 +21,6 @@ public:
 
     bool isInterestedInFileDrag (const juce::StringArray& files) override;
     void filesDropped (const juce::StringArray& files, int x, int y) override;
-
     void loadFile (const juce::File& file);
 
 private:
@@ -40,20 +38,18 @@ private:
 
     VocalEditorAudioProcessor& processor;
 
-    // Transport / file
-    juce::TextButton openButton  { "Open" };
-    juce::TextButton playButton  { "Play" };
-    juce::TextButton stopButton  { "Stop" };
-    juce::TextButton zoomInButton  { "+" };
+    juce::TextButton openButton { "Open" };
+    juce::TextButton playButton { "Play" };
+    juce::TextButton stopButton { "Stop" };
+    juce::TextButton zoomInButton { "+" };
     juce::TextButton zoomOutButton { "-" };
     juce::TextButton zoomFitButton { "Fit" };
 
-    // Phase 2
     juce::TextButton createEventButton { "Create Event" };
     juce::TextButton undoButton { "Undo" };
     juce::TextButton redoButton { "Redo" };
     juce::Slider gainSlider;
-    juce::Label  gainLabel;
+    juce::Label gainLabel;
 
     juce::Label titleLabel;
     juce::Label statusLabel;
@@ -61,11 +57,12 @@ private:
 
     TimelineComponent timeline;
     WaveformComponent waveform;
+    SelectedEventPanel selectedEventPanel;
 
-    juce::Colour bgColour     { 0xff0f172a };
-    juce::Colour panelColour  { 0xff1e293b };
+    juce::Colour bgColour { 0xff0f172a };
+    juce::Colour panelColour { 0xff1e293b };
     juce::Colour accentColour { 0xff2dd4bf };
-    juce::Colour textColour   { 0xffe2e8f0 };
+    juce::Colour textColour { 0xffe2e8f0 };
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (MainComponent)
 };
