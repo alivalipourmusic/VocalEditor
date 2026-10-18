@@ -250,6 +250,22 @@ namespace
                "working-set preflight rejects invalid sample counts");
     }
 
+    void testTimeToSampleIndexBounds()
+    {
+        check (VocalAudioMath::timeToSampleIndex (0.5, 48000.0, 48000) == 24000,
+               "timeline seconds map to the expected sample index");
+        check (VocalAudioMath::timeToSampleIndex (-1.0, 48000.0, 48000) == 0,
+               "negative timeline positions clamp to zero");
+        check (VocalAudioMath::timeToSampleIndex (1.0e300, 48000.0, 48000) == 48000,
+               "extremely large finite positions clamp before integer conversion");
+        check (VocalAudioMath::timeToSampleIndex (0.5, 0.0, 48000) == 0,
+               "invalid sample rates return a safe index");
+        check (VocalAudioMath::timeToSampleIndex (0.5, 48000.0, 0) == 0,
+               "empty audio returns a safe index");
+        check (VocalAudioMath::timeToSampleIndex (0.500001, 48000.0, 48000, true) == 24001,
+               "round-up mode includes the final partial sample");
+    }
+
     void testTimelineValidation()
     {
         const std::vector<std::pair<double, double>> valid {
@@ -360,6 +376,7 @@ int main()
     testFadeEndpointsAndShortEvents();
     testIntervalOverlapRules();
     testTimelineValidation();
+    testTimeToSampleIndexBounds();
     testAudioAllocationPreflight();
     testAudioWorkingSetBudget();
     testMergeEnvelopeBoundaryCompatibility();
