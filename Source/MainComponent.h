@@ -100,6 +100,7 @@ private:
     juce::Label titleLabel;
     juce::Label statusLabel;
     juce::Label timeLabel;
+    juce::Rectangle<int> meterBounds;
 
     TimelineComponent timeline;
     WaveformComponent waveform;
