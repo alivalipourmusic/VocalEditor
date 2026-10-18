@@ -137,6 +137,14 @@ void VocalEditorAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, 
     if (! currentlyPlaying.load (std::memory_order_acquire) || ! hasAudio())
         return;
 
+    // A file/session may have changed while a new render snapshot is pending.
+    // Never play the previous file's snapshot against the new session metadata.
+    if (processedBufferUpdatePending.load (std::memory_order_acquire))
+    {
+        buffer.clear();
+        return;
+    }
+
     int sourceIndex = 0;
     for (;;)
     {
@@ -1494,12 +1502,19 @@ void VocalEditorAudioProcessor::stopPlayback()
 
 void VocalEditorAudioProcessor::setSelection (double start, double end)
 {
+    if (! std::isfinite (start) || ! std::isfinite (end))
+    {
+        clearSelection();
+        return;
+    }
+
     if (end < start)
         std::swap (start, end);
-    
-    selection.startTime = juce::jmax (0.0, start);
-    selection.endTime = end;
-    selection.isActive = true;
+
+    const double duration = getDuration();
+    selection.startTime = juce::jlimit (0.0, duration, start);
+    selection.endTime = juce::jlimit (selection.startTime, duration, end);
+    selection.isActive = hasAudio() && selection.endTime > selection.startTime;
 }
 
 void VocalEditorAudioProcessor::clearSelection()
