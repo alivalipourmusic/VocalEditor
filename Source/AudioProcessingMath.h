@@ -1,6 +1,7 @@
 #pragma once
 
 #include <JuceHeader.h>
+#include "VocalEvent.h"
 #include <cmath>
 
 namespace VocalAudioMath
