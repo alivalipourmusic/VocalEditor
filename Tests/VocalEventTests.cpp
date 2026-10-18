@@ -207,6 +207,20 @@ namespace
                "allocation preflight rejects sample counts beyond AudioBuffer index limits");
     }
 
+    void testAudioWorkingSetBudget()
+    {
+        check (VocalAudioMath::isReasonableAudioWorkingSet (2, 1000, 4, 100000),
+               "working-set preflight accepts a small source plus three render buffers");
+        check (! VocalAudioMath::isReasonableAudioWorkingSet (2, 1000, 4, 1000),
+               "working-set preflight rejects aggregate buffers over budget");
+        check (! VocalAudioMath::isReasonableAudioWorkingSet (2, 1000, 0, 100000),
+               "working-set preflight rejects zero buffer copies");
+        check (! VocalAudioMath::isReasonableAudioWorkingSet (2,
+                    static_cast<juce::int64> (std::numeric_limits<int>::max()) + 1,
+                    4, std::numeric_limits<size_t>::max()),
+               "working-set preflight rejects invalid sample counts");
+    }
+
     void testTimelineValidation()
     {
         const std::vector<std::pair<double, double>> valid {
@@ -318,6 +332,7 @@ int main()
     testIntervalOverlapRules();
     testTimelineValidation();
     testAudioAllocationPreflight();
+    testAudioWorkingSetBudget();
     testMergeEnvelopeBoundaryCompatibility();
     testSignalLevelGainAndFadeRendering();
 
