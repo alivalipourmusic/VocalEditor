@@ -908,31 +908,15 @@ int VocalEditorAudioProcessor::levelEventsToTarget (float targetDb, bool selecte
         if (end <= start)
             continue;
 
-        double sumSquares = 0.0;
-        int sampleCount = 0;
-        for (int ch = 0; ch < audioBuffer.getNumChannels(); ++ch)
-        {
-            const float* data = audioBuffer.getReadPointer (ch, start);
-            for (int i = 0; i < end - start; ++i)
-            {
-                const double sample = data[i];
-                sumSquares += sample * sample;
-            }
-            sampleCount += end - start;
-        }
-
-        if (sampleCount <= 0)
+        // Measure what this event currently outputs, not just the unprocessed
+        // source. This includes existing envelope automation and fade curves.
+        const double rms = VocalAudioMath::measureRenderedEventRms (
+            *event, audioBuffer, currentSampleRate.load (std::memory_order_acquire));
+        if (! std::isfinite (rms) || rms < 1.0e-7)
             continue;
 
-        const double rms = std::sqrt (sumSquares / sampleCount);
-        if (rms < 1.0e-7)
-            continue;
-
-        const float measuredDb = juce::Decibels::gainToDecibels (
+        const float effectiveDb = juce::Decibels::gainToDecibels (
             static_cast<float> (rms), -120.0f);
-        // Compensate for the event's current gain so repeated Level Process
-        // operations converge toward the target instead of accumulating gain.
-        const float effectiveDb = measuredDb + event->gainDb;
         const float deltaDb = juce::jlimit (-24.0f, 12.0f, targetDb - effectiveDb);
         event->gainDb = juce::jlimit (-96.0f, 24.0f, event->gainDb + deltaDb);
         for (auto& point : event->envelope)
