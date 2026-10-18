@@ -153,6 +153,7 @@ void VocalEditorAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, 
             playbackPosition = 0.0;
             playbackSamplePosition = 0;
             buffer.clear();
+            outputPeak.store (0.0f, std::memory_order_relaxed);
             readingProcessedBuffer.store (-1, std::memory_order_release);
             return;
         }
@@ -175,6 +176,12 @@ void VocalEditorAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, 
         playbackPosition = static_cast<double> (playbackSamplePosition) / currentSampleRate;
         readingProcessedBuffer.store (-1, std::memory_order_release);
     }
+    // Peak meter follows the actual output signal, including the DAW pass-through path.
+    float blockPeak = 0.0f;
+    for (int ch = 0; ch < buffer.getNumChannels(); ++ch)
+        blockPeak = juce::jmax (blockPeak, buffer.getMagnitude (ch, 0, buffer.getNumSamples()));
+    outputPeak.store (blockPeak, std::memory_order_relaxed);
+
     // When the file audition transport is stopped, VST3 remains a pass-through
     // processor for host input. Live host-input editing is a separate integration step.
 }
