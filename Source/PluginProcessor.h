@@ -133,7 +133,7 @@ private:
     // the audio thread reads one immutable snapshot without taking a blocking lock.
     std::array<juce::AudioBuffer<float>, 3> processedBuffers;
     std::atomic<int> activeProcessedBuffer { 0 };
-    std::array<std::atomic<int>, 3> processedBufferReaders {};
+    std::array<std::atomic<int>, 3> processedBufferReaders { 0, 0, 0 };
 
     juce::File currentAudioFile;
     juce::File currentProjectFile;
