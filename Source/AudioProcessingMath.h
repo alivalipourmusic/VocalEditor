@@ -42,6 +42,11 @@ namespace VocalAudioMath
         return startA < endB - tolerance && startB < endA - tolerance;
     }
 
+    inline bool isSupportedSampleRate (double sampleRate) noexcept
+    {
+        return std::isfinite (sampleRate) && sampleRate >= 1000.0 && sampleRate <= 768000.0;
+    }
+
     // Check full-buffer allocation sizes before asking AudioBuffer to allocate.
     inline bool isReasonableAudioAllocation (int channels,
                                                juce::int64 samples,
