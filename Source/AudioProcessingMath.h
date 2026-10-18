@@ -154,6 +154,53 @@ namespace VocalAudioMath
         return static_cast<float> (gain);
     }
 
+    // Measure the RMS of the signal as this event currently renders, including
+    // its envelope and fades. Used by Level Process so repeated passes converge
+    // toward the target even when an event already has custom gain automation.
+    inline double measureRenderedEventRms (const VocalEvent& event,
+                                            const juce::AudioBuffer<float>& source,
+                                            double sampleRate) noexcept
+    {
+        if (source.getNumSamples() <= 0 || source.getNumChannels() <= 0
+            || ! std::isfinite (sampleRate) || sampleRate <= 0.0
+            || ! std::isfinite (event.startTime) || ! std::isfinite (event.endTime)
+            || event.endTime <= event.startTime)
+            return 0.0;
+
+        const int totalSamples = source.getNumSamples();
+        const int start = juce::jlimit (0, totalSamples,
+            static_cast<int> (std::floor (event.startTime * sampleRate)));
+        const int end = juce::jlimit (start, totalSamples,
+            static_cast<int> (std::ceil (event.endTime * sampleRate)));
+        const int length = end - start;
+        if (length <= 0)
+            return 0.0;
+
+        int fadeIn = static_cast<int> (std::round (event.fadeInMs * 0.001 * sampleRate));
+        int fadeOut = static_cast<int> (std::round (event.fadeOutMs * 0.001 * sampleRate));
+        fitFadesToEvent (length, fadeIn, fadeOut);
+
+        double sumSquares = 0.0;
+        const auto channels = source.getNumChannels();
+        for (int i = 0; i < length; ++i)
+        {
+            const double t = length > 1 ? static_cast<double> (i) / (length - 1) : 0.0;
+            const float envelopeDb = event.getEnvelopeGainDb (static_cast<float> (t));
+            const float gain = juce::Decibels::decibelsToGain (envelopeDb);
+            const float fade = fadeGainAtSample (i, length, fadeIn, fadeOut,
+                                                  event.fadeInCurve, event.fadeOutCurve);
+            const double scale = static_cast<double> (gain) * fade;
+            for (int channel = 0; channel < channels; ++channel)
+            {
+                const double sample = static_cast<double> (source.getSample (channel, start + i)) * scale;
+                sumSquares += sample * sample;
+            }
+        }
+
+        const auto sampleCount = static_cast<double> (length) * channels;
+        return sampleCount > 0.0 ? std::sqrt (sumSquares / sampleCount) : 0.0;
+    }
+
     // Applies a single event to an already-copied audio buffer. This function
     // is shared by the processor and signal-level tests.
     inline void applyEventToBuffer (const VocalEvent& event,
