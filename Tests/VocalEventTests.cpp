@@ -378,6 +378,20 @@ namespace
                "zero-length intervals are invalid and do not overlap");
     }
 
+    void testFadeFitAvoidsIntegerOverflow()
+    {
+        int fadeIn = std::numeric_limits<int>::max();
+        int fadeOut = std::numeric_limits<int>::max();
+        const int eventLength = std::numeric_limits<int>::max();
+        VocalAudioMath::fitFadesToEvent (eventLength, fadeIn, fadeOut);
+        check (fadeIn >= 0 && fadeOut >= 0,
+               "very large fade lengths remain non-negative after fitting");
+        check (static_cast<juce::int64> (fadeIn) + fadeOut == eventLength,
+               "very large overlapping fades fit exactly without signed integer overflow");
+        check (fadeIn <= eventLength && fadeOut <= eventLength,
+               "fitted fades never exceed the event length");
+    }
+
     void testFadeEndpointsAndShortEvents()
     {
         int fadeIn = 8, fadeOut = 8;
@@ -441,6 +455,7 @@ int main()
     testSampleRateMappingAcrossRates();
     testLinearInterpolation();
     testFadeEndpointsAndShortEvents();
+    testFadeFitAvoidsIntegerOverflow();
     testIntervalOverlapRules();
     testTimelineValidation();
     testTimeToSampleIndexBounds();
