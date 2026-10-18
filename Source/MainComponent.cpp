@@ -568,7 +568,7 @@ void MainComponent::timerCallback()
 {
     // Retry any render publication deferred because all non-active snapshots
     // were briefly pinned by the audio callback or an export operation.
-    if (processor.isProcessedBufferUpdatePending())
+    if (processor.shouldRetryProcessedBufferUpdate())
         processor.updateProcessedBuffer();
 
     // Update time display
