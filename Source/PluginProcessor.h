@@ -90,6 +90,8 @@ public:
     VocalEvent* createEventFromSelection (VocalEvent::Type type = VocalEvent::Type::Custom);
     void setEventGain (const juce::Uuid& id, float gainDb);
     void setEventFades (const juce::Uuid& id, double fadeInMs, double fadeOutMs);
+    void setEventEnvelopePoint (const juce::Uuid& id, float t, float gainDb);
+    void removeEventEnvelopePoint (const juce::Uuid& id, int pointIndex);
     void splitEvent (const juce::Uuid& id, double splitTime);
     void mergeEvents (const juce::Uuid& idA, const juce::Uuid& idB);
     void deleteEvent (const juce::Uuid& id);
