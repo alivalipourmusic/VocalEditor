@@ -410,27 +410,25 @@ bool VocalEditorAudioProcessor::restoreStateFromXml (const juce::XmlElement& xml
     // committing any project state. This keeps failed loads fully atomic.
     const double stagedDuration = stagedAudio.getNumSamples() > 0
         ? static_cast<double> (stagedAudio.getNumSamples()) / stagedSampleRate : 0.0;
+    std::vector<std::pair<double, double>> timelineIntervals;
+    timelineIntervals.reserve (stagedEvents.size());
 
-    for (size_t i = 0; i < stagedEvents.size(); ++i)
+    for (const auto& event : stagedEvents)
     {
-        const auto& event = stagedEvents[i];
         const double length = event.end - event.start;
-
-        if (event.end > stagedDuration + 1.0e-6
-            || event.fadeInMs > length * 500.0 + 1.0e-6
+        if (event.fadeInMs > length * 500.0 + 1.0e-6
             || event.fadeOutMs > length * 500.0 + 1.0e-6)
         {
-            errorMessage = "The project contains an event outside the source audio or invalid fades.";
+            errorMessage = "The project contains invalid fades.";
             return false;
         }
+        timelineIntervals.emplace_back (event.start, event.end);
+    }
 
-        for (size_t j = i + 1; j < stagedEvents.size(); ++j)
-            if (VocalAudioMath::intervalsOverlap (event.start, event.end,
-                                                   stagedEvents[j].start, stagedEvents[j].end))
-            {
-                errorMessage = "The project contains overlapping events.";
-                return false;
-            }
+    if (! VocalAudioMath::isValidNonOverlappingTimeline (timelineIntervals, stagedDuration))
+    {
+        errorMessage = "The project contains out-of-range or overlapping events.";
+        return false;
     }
 
     // Commit only after the XML, source audio, and complete event timeline
