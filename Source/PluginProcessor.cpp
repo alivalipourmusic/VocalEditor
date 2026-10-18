@@ -214,6 +214,10 @@ void VocalEditorAudioProcessor::getStateInformation (juce::MemoryBlock& destData
     state.setProperty ("roomTailThresholdDb", roomTailThresholdDb, nullptr);
     state.setProperty ("roomTailMaxReductionDb", roomTailMaxReductionDb, nullptr);
     state.setProperty ("roomTailSensitivity", roomTailSensitivity, nullptr);
+    state.setProperty ("spectralBalanceEnabled", spectralBalanceEnabled, nullptr);
+    state.setProperty ("spectralLowDb", spectralLowDb, nullptr);
+    state.setProperty ("spectralMidDb", spectralMidDb, nullptr);
+    state.setProperty ("spectralHighDb", spectralHighDb, nullptr);
 
     for (const auto* event : eventList.getAll())
     {
@@ -277,6 +281,10 @@ void VocalEditorAudioProcessor::setStateInformation (const void* data, int sizeI
     roomTailThresholdDb = juce::jlimit (-60.0f, -12.0f, static_cast<float> (state.getProperty ("roomTailThresholdDb", -36.0f)));
     roomTailMaxReductionDb = juce::jlimit (0.0f, 24.0f, static_cast<float> (state.getProperty ("roomTailMaxReductionDb", 8.0f)));
     roomTailSensitivity = juce::jlimit (0.1f, 1.0f, static_cast<float> (state.getProperty ("roomTailSensitivity", 0.65f)));
+    spectralBalanceEnabled = static_cast<bool> (state.getProperty ("spectralBalanceEnabled", false));
+    spectralLowDb = juce::jlimit (-12.0f, 12.0f, static_cast<float> (state.getProperty ("spectralLowDb", 0.0f)));
+    spectralMidDb = juce::jlimit (-12.0f, 12.0f, static_cast<float> (state.getProperty ("spectralMidDb", 0.0f)));
+    spectralHighDb = juce::jlimit (-12.0f, 12.0f, static_cast<float> (state.getProperty ("spectralHighDb", 0.0f)));
 
     const auto audioPath = state.getProperty ("audioFile").toString();
     const juce::File audioFile (audioPath);
@@ -648,6 +656,57 @@ void VocalEditorAudioProcessor::applyRoomTailReductionToBuffer (juce::AudioBuffe
     }
 }
 
+void VocalEditorAudioProcessor::setSpectralBalanceEnabled (bool enabled)
+{
+    if (spectralBalanceEnabled == enabled)
+        return;
+    spectralBalanceEnabled = enabled;
+    updateProcessedBuffer();
+}
+
+void VocalEditorAudioProcessor::setSpectralBalanceParameters (float lowDb, float midDb, float highDb)
+{
+    spectralLowDb = juce::jlimit (-12.0f, 12.0f, lowDb);
+    spectralMidDb = juce::jlimit (-12.0f, 12.0f, midDb);
+    spectralHighDb = juce::jlimit (-12.0f, 12.0f, highDb);
+    updateProcessedBuffer();
+}
+
+void VocalEditorAudioProcessor::applySpectralBalanceToBuffer (juce::AudioBuffer<float>& buffer)
+{
+    if (! spectralBalanceEnabled || buffer.getNumSamples() == 0 || currentSampleRate <= 0.0
+        || (std::abs (spectralLowDb) < 0.001f && std::abs (spectralMidDb) < 0.001f
+            && std::abs (spectralHighDb) < 0.001f))
+        return;
+
+    // Three broad, first-order shelves/tilt bands. This is a practical tone
+    // control, not AI mastering or automatic spectral correction.
+    const float lowGain = juce::Decibels::decibelsToGain (spectralLowDb);
+    const float midGain = juce::Decibels::decibelsToGain (spectralMidDb);
+    const float highGain = juce::Decibels::decibelsToGain (spectralHighDb);
+    const double sr = currentSampleRate;
+    const float lowAlpha = static_cast<float> (1.0 - std::exp (-2.0 * juce::MathConstants<double>::pi * 180.0 / sr));
+    const float highAlpha = static_cast<float> (1.0 - std::exp (-2.0 * juce::MathConstants<double>::pi * 4500.0 / sr));
+
+    for (int ch = 0; ch < buffer.getNumChannels(); ++ch)
+    {
+        auto* data = buffer.getWritePointer (ch);
+        float lowState = 0.0f;
+        float highLowState = 0.0f;
+        for (int i = 0; i < buffer.getNumSamples(); ++i)
+        {
+            const float input = data[i];
+            lowState += lowAlpha * (input - lowState);
+            const float low = lowState;
+            const float highPass = input - highLowState;
+            highLowState += highAlpha * (input - highLowState);
+            const float high = highPass;
+            const float mid = input - low - high;
+            data[i] = low * lowGain + mid * midGain + high * highGain;
+        }
+    }
+}
+
 void VocalEditorAudioProcessor::updateProcessedBuffer()
 {
     // The message thread is the only writer. Never overwrite the published
@@ -685,6 +744,7 @@ void VocalEditorAudioProcessor::updateProcessedBuffer()
     applyDePlosiveToBuffer (target);
     applyNoiseReductionToBuffer (target);
     applyRoomTailReductionToBuffer (target);
+    applySpectralBalanceToBuffer (target);
 
     activeProcessedBuffer.store (targetIndex, std::memory_order_release);
 }
