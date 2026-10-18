@@ -62,6 +62,7 @@ private:
 
     // Phase 2
     juce::TextButton createEventButton { "Create Event" };
+    juce::TextButton automationButton { "Volume Draw: OFF" };
     juce::TextButton undoButton { "Undo" };
     juce::TextButton redoButton { "Redo" };
     juce::TextButton autoSegmentButton { "Auto Segment" };
