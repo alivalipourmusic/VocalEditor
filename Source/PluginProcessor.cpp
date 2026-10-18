@@ -280,6 +280,30 @@ void VocalEditorAudioProcessor::setSelectedEvent (VocalEvent* event)
         selectedEventIds.addIfNotAlreadyThere (event->id);
 }
 
+void VocalEditorAudioProcessor::setEventGain (const juce::Uuid& id, float gainDb)
+{
+    if (auto* event = eventList.getById (id))
+        event->gainDb = juce::jlimit (-60.0f, 24.0f, gainDb);
+}
+
+void VocalEditorAudioProcessor::setEventFades (const juce::Uuid& id, double fadeInMs, double fadeOutMs)
+{
+    if (auto* event = eventList.getById (id))
+    {
+        const double maxFadeMs = event->getLength() * 500.0;
+        event->fadeInMs = juce::jlimit (0.0, maxFadeMs, fadeInMs);
+        event->fadeOutMs = juce::jlimit (0.0, maxFadeMs, fadeOutMs);
+    }
+}
+
+void VocalEditorAudioProcessor::deleteEvent (const juce::Uuid& id)
+{
+    if (selectedEvent != nullptr && selectedEvent->id == id)
+        selectedEvent = nullptr;
+    selectedEventIds.removeAllInstancesOf (id);
+    eventList.removeById (id);
+}
+
 //==============================================================================
 // This creates new instances of the plugin
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()
