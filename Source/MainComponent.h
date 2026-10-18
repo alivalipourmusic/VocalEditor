@@ -42,6 +42,7 @@ private:
     void gainSliderChanged();
     void autoSegmentClicked();
     void levelProcessClicked();
+    void deEsserChanged();
 
     VocalEditorAudioProcessor& processor;
 
@@ -63,6 +64,10 @@ private:
     juce::Slider silenceSlider;
     juce::Slider paddingSlider;
     juce::Slider targetLevelSlider;
+    juce::ToggleButton deEsserToggle { "De-Esser" };
+    juce::Slider deEsserFrequencySlider;
+    juce::Slider deEsserThresholdSlider;
+    juce::Slider deEsserReductionSlider;
     juce::ToggleButton selectedOnlyToggle { "Selected only" };
     juce::ComboBox segmentTypeCombo;
     juce::Label analysisLabel;
