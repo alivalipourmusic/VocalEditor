@@ -263,6 +263,9 @@ std::unique_ptr<juce::XmlElement> VocalEditorAudioProcessor::createStateXml() co
         item->setAttribute ("gainDb", event->gainDb);
         item->setAttribute ("fadeInMs", event->fadeInMs);
         item->setAttribute ("fadeOutMs", event->fadeOutMs);
+        item->setAttribute ("dynamicGainDb", event->dynamicGainDb);
+        item->setAttribute ("gainTransitionInMs", event->gainTransitionInMs);
+        item->setAttribute ("gainTransitionOutMs", event->gainTransitionOutMs);
         item->setAttribute ("fadeInCurve", static_cast<int> (event->fadeInCurve));
         item->setAttribute ("fadeOutCurve", static_cast<int> (event->fadeOutCurve));
         item->setAttribute ("locked", event->locked);
@@ -322,6 +325,9 @@ bool VocalEditorAudioProcessor::restoreStateFromXml (const juce::XmlElement& xml
         float gainDb = 0.0f;
         double fadeInMs = 0.0;
         double fadeOutMs = 0.0;
+        float dynamicGainDb = 0.0f;
+        double gainTransitionInMs = 0.0;
+        double gainTransitionOutMs = 0.0;
         VocalEvent::FadeCurve fadeInCurve = VocalEvent::FadeCurve::Smooth;
         VocalEvent::FadeCurve fadeOutCurve = VocalEvent::FadeCurve::Smooth;
         bool locked = false;
@@ -344,6 +350,9 @@ bool VocalEditorAudioProcessor::restoreStateFromXml (const juce::XmlElement& xml
             data.gainDb = static_cast<float> (item->getDoubleAttribute ("gainDb", 0.0));
             data.fadeInMs = item->getDoubleAttribute ("fadeInMs", 0.0);
             data.fadeOutMs = item->getDoubleAttribute ("fadeOutMs", 0.0);
+            data.dynamicGainDb = static_cast<float> (item->getDoubleAttribute ("dynamicGainDb", 0.0));
+            data.gainTransitionInMs = item->getDoubleAttribute ("gainTransitionInMs", 0.0);
+            data.gainTransitionOutMs = item->getDoubleAttribute ("gainTransitionOutMs", 0.0);
             data.locked = item->getBoolAttribute ("locked", false);
 
             if (data.id.isNull()
@@ -354,6 +363,12 @@ bool VocalEditorAudioProcessor::restoreStateFromXml (const juce::XmlElement& xml
                 || ! std::isfinite (data.start) || ! std::isfinite (data.end)
                 || ! std::isfinite (data.gainDb)
                 || ! std::isfinite (data.fadeInMs) || ! std::isfinite (data.fadeOutMs)
+                || ! std::isfinite (data.dynamicGainDb)
+                || ! std::isfinite (data.gainTransitionInMs) || ! std::isfinite (data.gainTransitionOutMs)
+                || data.dynamicGainDb < -24.0f || data.dynamicGainDb > 24.0f
+                || data.gainTransitionInMs < 0.0 || data.gainTransitionOutMs < 0.0
+                || data.gainTransitionInMs > (data.end - data.start) * 500.0 + 1.0e-6
+                || data.gainTransitionOutMs > (data.end - data.start) * 500.0 + 1.0e-6
                 || data.start < 0.0 || data.end <= data.start
                 || data.gainDb < -96.0f || data.gainDb > 24.0f
                 || data.fadeInMs < 0.0 || data.fadeOutMs < 0.0)
@@ -489,6 +504,9 @@ bool VocalEditorAudioProcessor::restoreStateFromXml (const juce::XmlElement& xml
         event->gainDb = data.gainDb;
         event->fadeInMs = juce::jmin (data.fadeInMs, event->getLength() * 500.0);
         event->fadeOutMs = juce::jmin (data.fadeOutMs, event->getLength() * 500.0);
+        event->dynamicGainDb = data.dynamicGainDb;
+        event->gainTransitionInMs = juce::jmin (data.gainTransitionInMs, event->getLength() * 500.0);
+        event->gainTransitionOutMs = juce::jmin (data.gainTransitionOutMs, event->getLength() * 500.0);
         event->fadeInCurve = data.fadeInCurve;
         event->fadeOutCurve = data.fadeOutCurve;
         event->locked = data.locked;
@@ -979,6 +997,9 @@ juce::XmlElement VocalEditorAudioProcessor::captureEventState() const
         item->setAttribute ("gainDb", event->gainDb);
         item->setAttribute ("fadeInMs", event->fadeInMs);
         item->setAttribute ("fadeOutMs", event->fadeOutMs);
+        item->setAttribute ("dynamicGainDb", event->dynamicGainDb);
+        item->setAttribute ("gainTransitionInMs", event->gainTransitionInMs);
+        item->setAttribute ("gainTransitionOutMs", event->gainTransitionOutMs);
         item->setAttribute ("fadeInCurve", static_cast<int> (event->fadeInCurve));
         item->setAttribute ("fadeOutCurve", static_cast<int> (event->fadeOutCurve));
         item->setAttribute ("locked", event->locked);
@@ -1011,7 +1032,8 @@ bool VocalEditorAudioProcessor::restoreEventState (const juce::XmlElement& state
         juce::Uuid id;
         VocalEvent::Type type = VocalEvent::Type::Custom;
         double start = 0.0, end = 0.0, fadeIn = 0.0, fadeOut = 0.0;
-        float gain = 0.0f;
+        float gain = 0.0f, dynamicGain = 0.0f;
+        double transitionIn = 0.0, transitionOut = 0.0;
         VocalEvent::FadeCurve fadeInCurve = VocalEvent::FadeCurve::Smooth;
         VocalEvent::FadeCurve fadeOutCurve = VocalEvent::FadeCurve::Smooth;
         bool locked = false;
@@ -1033,12 +1055,21 @@ bool VocalEditorAudioProcessor::restoreEventState (const juce::XmlElement& state
             data.gain = static_cast<float> (item->getDoubleAttribute ("gainDb", 0.0));
             data.fadeIn = item->getDoubleAttribute ("fadeInMs", 0.0);
             data.fadeOut = item->getDoubleAttribute ("fadeOutMs", 0.0);
+            data.dynamicGain = static_cast<float> (item->getDoubleAttribute ("dynamicGainDb", 0.0));
+            data.transitionIn = item->getDoubleAttribute ("gainTransitionInMs", 0.0);
+            data.transitionOut = item->getDoubleAttribute ("gainTransitionOutMs", 0.0);
             data.locked = item->getBoolAttribute ("locked", false);
 
             if (data.id.isNull() || type < 0 || type > 4
                 || inCurve < 0 || inCurve > 1 || outCurve < 0 || outCurve > 1
                 || ! std::isfinite (data.start) || ! std::isfinite (data.end)
                 || ! std::isfinite (data.gain) || ! std::isfinite (data.fadeIn)
+                || ! std::isfinite (data.fadeOut) || ! std::isfinite (data.dynamicGain)
+                || ! std::isfinite (data.transitionIn) || ! std::isfinite (data.transitionOut)
+                || data.dynamicGain < -24.0f || data.dynamicGain > 24.0f
+                || data.transitionIn < 0.0 || data.transitionOut < 0.0
+                || data.transitionIn > (data.end - data.start) * 500.0 + 1.0e-6
+                || data.transitionOut > (data.end - data.start) * 500.0 + 1.0e-6
                 || ! std::isfinite (data.fadeOut) || data.start < 0.0
                 || data.end <= data.start || data.gain < -96.0f || data.gain > 24.0f
                 || data.fadeIn < 0.0 || data.fadeOut < 0.0
@@ -1093,6 +1124,9 @@ bool VocalEditorAudioProcessor::restoreEventState (const juce::XmlElement& state
         event->gainDb = data.gain;
         event->fadeInMs = juce::jmin (data.fadeIn, event->getLength() * 500.0);
         event->fadeOutMs = juce::jmin (data.fadeOut, event->getLength() * 500.0);
+        event->dynamicGainDb = data.dynamicGain;
+        event->gainTransitionInMs = juce::jmin (data.transitionIn, event->getLength() * 500.0);
+        event->gainTransitionOutMs = juce::jmin (data.transitionOut, event->getLength() * 500.0);
         event->fadeInCurve = data.fadeInCurve;
         event->fadeOutCurve = data.fadeOutCurve;
         event->locked = data.locked;
