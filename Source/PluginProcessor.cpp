@@ -225,6 +225,9 @@ void VocalEditorAudioProcessor::clearAudio()
     playbackSamplePosition = 0;
     currentlyPlaying = false;
     clearSelection();
+    eventList.clear();
+    selectedEvent = nullptr;
+    selectedEventIds.clear();
 }
 
 void VocalEditorAudioProcessor::setPlaybackPosition (double positionInSeconds)
