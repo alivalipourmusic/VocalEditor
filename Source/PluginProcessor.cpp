@@ -510,8 +510,12 @@ bool VocalEditorAudioProcessor::restoreStateFromXml (const juce::XmlElement& xml
 
     const double maxPosition = audioBuffer.getNumSamples() > 0
         ? static_cast<double> (audioBuffer.getNumSamples()) / currentSampleRate : 0.0;
-    playbackPosition = juce::jlimit (0.0, maxPosition, stagedPlaybackPosition);
-    playbackSamplePosition = static_cast<int> (playbackPosition * currentSampleRate);
+    playbackPosition.store (juce::jlimit (0.0, maxPosition, stagedPlaybackPosition),
+                            std::memory_order_release);
+    playbackSamplePosition.store (VocalAudioMath::timeToSampleIndex (
+        playbackPosition.load (std::memory_order_acquire),
+        currentSampleRate.load (std::memory_order_acquire), audioBuffer.getNumSamples()),
+        std::memory_order_release);
     currentlyPlaying = false;
 
     selection.startTime = stagedSelectionStart;
