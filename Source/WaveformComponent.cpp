@@ -89,6 +89,7 @@ void WaveformComponent::drawEvents (juce::Graphics& g)
         g.setColour (juce::Colour (0xff0b1220).withAlpha (selected ? 0.94f : 0.82f));
         g.fillRoundedRectangle (x1, 2.0f, x2 - x1, static_cast<float> (getHeight() - 4), 3.0f);
         drawEventWaveform (g, *event, x1, x2);
+        drawAutomation (g, *event, selected);
         g.setColour (selected ? juce::Colour (0xff67e8f9) : juce::Colour (0xff2dd4bf));
         g.drawVerticalLine (static_cast<int> (x1), 1.0f, static_cast<float> (getHeight() - 1));
         g.drawVerticalLine (static_cast<int> (x2), 1.0f, static_cast<float> (getHeight() - 1));
@@ -155,6 +156,66 @@ void WaveformComponent::drawEventWaveform (juce::Graphics& g, const VocalEvent& 
     }
 
     g.restoreState();
+}
+
+float WaveformComponent::yToGainDb (float y) const
+{
+    const float top = 12.0f;
+    const float bottom = static_cast<float> (getHeight()) - 12.0f;
+    const float proportion = 1.0f - juce::jlimit (0.0f, 1.0f, (y - top) / juce::jmax (1.0f, bottom - top));
+    return -24.0f + proportion * 36.0f;
+}
+
+float WaveformComponent::gainDbToY (float gainDb) const
+{
+    const float top = 12.0f;
+    const float bottom = static_cast<float> (getHeight()) - 12.0f;
+    const float proportion = (gainDb + 24.0f) / 36.0f;
+    return bottom - juce::jlimit (0.0f, 1.0f, proportion) * (bottom - top);
+}
+
+int WaveformComponent::hitTestAutomationPoint (const VocalEvent& event, float x, float y) const
+{
+    for (int i = 0; i < event.envelope.size(); ++i)
+    {
+        const auto& point = event.envelope.getReference (i);
+        const float px = static_cast<float> (timeToX (event.startTime + point.t * event.getLength()));
+        const float py = gainDbToY (point.gainDb);
+        if (std::abs (px - x) <= 8.0f && std::abs (py - y) <= 10.0f)
+            return i;
+    }
+    return -1;
+}
+
+void WaveformComponent::drawAutomation (juce::Graphics& g, const VocalEvent& event, bool selected)
+{
+    if (event.envelope.isEmpty())
+        return;
+
+    juce::Path curve;
+    for (int i = 0; i < event.envelope.size(); ++i)
+    {
+        const auto& point = event.envelope.getReference (i);
+        const float x = static_cast<float> (timeToX (event.startTime + point.t * event.getLength()));
+        const float y = gainDbToY (point.gainDb);
+        if (i == 0)
+            curve.startNewSubPath (x, y);
+        else
+            curve.lineTo (x, y);
+    }
+
+    g.setColour (juce::Colour (0xffffc857).withAlpha (selected ? 1.0f : 0.65f));
+    g.strokePath (curve, juce::PathStrokeType (selected ? 2.5f : 1.5f));
+
+    if (selected || automationMode)
+    {
+        for (const auto& point : event.envelope)
+        {
+            const float x = static_cast<float> (timeToX (event.startTime + point.t * event.getLength()));
+            const float y = gainDbToY (point.gainDb);
+            g.fillEllipse (x - 4.0f, y - 4.0f, 8.0f, 8.0f);
+        }
+    }
 }
 
 void WaveformComponent::drawFadeHandles (juce::Graphics& g, const VocalEvent& event, bool isSelected)
@@ -322,6 +383,46 @@ void WaveformComponent::mouseDown (const juce::MouseEvent& e)
 
     const double time = juce::jlimit (0.0, totalDuration, xToTime (static_cast<float> (e.x)));
 
+    if (automationMode)
+    {
+        auto* event = processor.getEventList().getAtTime (time);
+        if (event != nullptr)
+        {
+            processor.setSelectedEvent (event);
+            processor.clearSelection();
+            automationEventId = event->id;
+            draggedAutomationPoint = hitTestAutomationPoint (*event, static_cast<float> (e.x), static_cast<float> (e.y));
+
+            if (e.mods.isRightButtonDown())
+            {
+                if (draggedAutomationPoint > 0 && draggedAutomationPoint < event->envelope.size() - 1)
+                    processor.removeEventEnvelopePoint (event->id, draggedAutomationPoint);
+                draggedAutomationPoint = -1;
+                dragMode = DragMode::None;
+            }
+            else
+            {
+                const float t = static_cast<float> ((time - event->startTime) / juce::jmax (0.001, event->getLength()));
+                if (draggedAutomationPoint < 0)
+                {
+                    processor.setEventEnvelopePoint (event->id, -1, t, yToGainDb (static_cast<float> (e.y)));
+                    draggedAutomationPoint = 0;
+                    float nearest = 100000.0f;
+                    for (int i = 0; i < event->envelope.size(); ++i)
+                    {
+                        const float d = std::abs (event->envelope.getReference (i).t - t);
+                        if (d < nearest) { nearest = d; draggedAutomationPoint = i; }
+                    }
+                }
+                dragMode = DragMode::AutomationPoint;
+                isSelecting = false;
+            }
+            processor.setPlaybackPosition (time);
+            repaint();
+            return;
+        }
+    }
+
     // Fade handles take priority over event selection and range selection.
     VocalEvent* fadeEvent = nullptr;
     const auto fadeMode = hitTestFadeHandle (static_cast<float> (e.x), fadeEvent);
@@ -393,6 +494,24 @@ void WaveformComponent::mouseDrag (const juce::MouseEvent& e)
 
     const double time = juce::jlimit (0.0, totalDuration, xToTime (static_cast<float> (e.x)));
 
+    if (dragMode == DragMode::AutomationPoint)
+    {
+        if (auto* event = processor.getEventList().getById (automationEventId))
+        {
+            const float t = static_cast<float> ((time - event->startTime) / juce::jmax (0.001, event->getLength()));
+            processor.setEventEnvelopePoint (event->id, draggedAutomationPoint, t, yToGainDb (static_cast<float> (e.y)));
+            // Keep tracking the same point after the point list is sorted.
+            float nearest = 100000.0f;
+            for (int i = 0; i < event->envelope.size(); ++i)
+            {
+                const auto d = std::abs (event->envelope.getReference (i).t - t);
+                if (d < nearest) { nearest = d; draggedAutomationPoint = i; }
+            }
+            repaint();
+        }
+        return;
+    }
+
     if (dragMode == DragMode::FadeIn || dragMode == DragMode::FadeOut)
     {
         if (auto* event = processor.getEventList().getById (fadeDragEventId))
@@ -434,6 +553,12 @@ void WaveformComponent::mouseDrag (const juce::MouseEvent& e)
 
 void WaveformComponent::mouseMove (const juce::MouseEvent& e)
 {
+    if (automationMode)
+    {
+        setMouseCursor (juce::MouseCursor::CrosshairCursor);
+        return;
+    }
+
     VocalEvent* event = nullptr;
     const auto mode = hitTestFadeHandle (static_cast<float> (e.x), event);
     if (mode == DragMode::FadeIn || mode == DragMode::FadeOut)
@@ -459,6 +584,8 @@ void WaveformComponent::mouseUp (const juce::MouseEvent& e)
     isSelecting = false;
     dragMode = DragMode::None;
     fadeDragEventId = juce::Uuid::null();
+    draggedAutomationPoint = -1;
+    automationEventId = juce::Uuid::null();
 
     auto& sel = processor.getSelection();
     if (sel.isActive && sel.getLength() < 0.005)
