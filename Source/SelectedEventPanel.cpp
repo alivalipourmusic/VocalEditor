@@ -37,6 +37,37 @@ SelectedEventPanel::SelectedEventPanel (VocalEditorAudioProcessor& p)
     resetGainButton.setColour (juce::TextButton::textColourOffId, textColour);
     addAndMakeVisible (resetGainButton);
 
+    setupLabel (dynamicGainLabel, "Word Dynamics (dB)");
+    dynamicGainSlider.setRange (-24.0, 24.0, 0.1);
+    dynamicGainSlider.setValue (0.0);
+    dynamicGainSlider.setTextValueSuffix (" dB");
+    dynamicGainSlider.setNumDecimalPlacesToDisplay (1);
+    dynamicGainSlider.setSliderStyle (juce::Slider::LinearHorizontal);
+    dynamicGainSlider.setTextBoxStyle (juce::Slider::TextBoxRight, false, 60, 22);
+    dynamicGainSlider.onValueChange = [this] { dynamicGainChanged(); };
+    dynamicGainSlider.setColour (juce::Slider::thumbColourId, accentColour);
+    addAndMakeVisible (dynamicGainSlider);
+
+    setupLabel (transitionInLabel, "Soft Gain In (ms)");
+    transitionInSlider.setRange (0.0, 200.0, 1.0);
+    transitionInSlider.setValue (0.0);
+    transitionInSlider.setTextValueSuffix (" ms");
+    transitionInSlider.setSliderStyle (juce::Slider::LinearHorizontal);
+    transitionInSlider.setTextBoxStyle (juce::Slider::TextBoxRight, false, 60, 22);
+    transitionInSlider.onValueChange = [this] { transitionInChanged(); };
+    transitionInSlider.setColour (juce::Slider::thumbColourId, accentColour);
+    addAndMakeVisible (transitionInSlider);
+
+    setupLabel (transitionOutLabel, "Soft Gain Out (ms)");
+    transitionOutSlider.setRange (0.0, 200.0, 1.0);
+    transitionOutSlider.setValue (0.0);
+    transitionOutSlider.setTextValueSuffix (" ms");
+    transitionOutSlider.setSliderStyle (juce::Slider::LinearHorizontal);
+    transitionOutSlider.setTextBoxStyle (juce::Slider::TextBoxRight, false, 60, 22);
+    transitionOutSlider.onValueChange = [this] { transitionOutChanged(); };
+    transitionOutSlider.setColour (juce::Slider::thumbColourId, accentColour);
+    addAndMakeVisible (transitionOutSlider);
+
     setupLabel (fadeInLabel, "Fade In (ms)");
     fadeInSlider.setRange (0.0, 500.0, 1.0);
     fadeInSlider.setValue (0.0);
@@ -107,6 +138,9 @@ void SelectedEventPanel::resized()
     juce::Component* controls[] = {
         &typeLabel, &timeLabel, &lengthLabel,
         &gainLabel, &gainSlider, &resetGainButton,
+        &dynamicGainLabel, &dynamicGainSlider,
+        &transitionInLabel, &transitionInSlider,
+        &transitionOutLabel, &transitionOutSlider,
         &fadeInLabel, &fadeInSlider, &fadeOutLabel, &fadeOutSlider,
         &splitButton, &deleteButton
     };
@@ -126,7 +160,17 @@ void SelectedEventPanel::resized()
     resetGainButton.setBounds (gainRow.removeFromRight (60));
     gainRow.removeFromRight (6);
     gainSlider.setBounds (gainRow);
-    r.removeFromTop (10);
+    r.removeFromTop (8);
+
+    dynamicGainLabel.setBounds (r.removeFromTop (18));
+    dynamicGainSlider.setBounds (r.removeFromTop (28));
+    r.removeFromTop (6);
+    transitionInLabel.setBounds (r.removeFromTop (18));
+    transitionInSlider.setBounds (r.removeFromTop (28));
+    r.removeFromTop (6);
+    transitionOutLabel.setBounds (r.removeFromTop (18));
+    transitionOutSlider.setBounds (r.removeFromTop (28));
+    r.removeFromTop (8);
 
     fadeInLabel.setBounds (r.removeFromTop (18));
     fadeInSlider.setBounds (r.removeFromTop (28));
@@ -171,6 +215,18 @@ void SelectedEventPanel::updateFromEvent()
         if (std::abs (gainSlider.getValue() - e->gainDb) > 0.05)
             gainSlider.setValue (e->gainDb, juce::dontSendNotification);
 
+    if (! dynamicGainSlider.isMouseButtonDown())
+        if (std::abs (dynamicGainSlider.getValue() - e->dynamicGainDb) > 0.05)
+            dynamicGainSlider.setValue (e->dynamicGainDb, juce::dontSendNotification);
+
+    if (! transitionInSlider.isMouseButtonDown())
+        if (std::abs (transitionInSlider.getValue() - e->gainTransitionInMs) > 0.5)
+            transitionInSlider.setValue (e->gainTransitionInMs, juce::dontSendNotification);
+
+    if (! transitionOutSlider.isMouseButtonDown())
+        if (std::abs (transitionOutSlider.getValue() - e->gainTransitionOutMs) > 0.5)
+            transitionOutSlider.setValue (e->gainTransitionOutMs, juce::dontSendNotification);
+
     if (! fadeInSlider.isMouseButtonDown())
         if (std::abs (fadeInSlider.getValue() - e->fadeInMs) > 0.5)
             fadeInSlider.setValue (e->fadeInMs, juce::dontSendNotification);
@@ -196,6 +252,27 @@ void SelectedEventPanel::fadeOutChanged()
 {
     if (auto* e = processor.getSelectedEvent())
         processor.setEventFades (e->id, e->fadeInMs, fadeOutSlider.getValue());
+}
+
+void SelectedEventPanel::dynamicGainChanged()
+{
+    if (auto* e = processor.getSelectedEvent())
+        processor.setEventDynamics (e->id, static_cast<float> (dynamicGainSlider.getValue()),
+                                   e->gainTransitionInMs, e->gainTransitionOutMs);
+}
+
+void SelectedEventPanel::transitionInChanged()
+{
+    if (auto* e = processor.getSelectedEvent())
+        processor.setEventDynamics (e->id, e->dynamicGainDb,
+                                   transitionInSlider.getValue(), e->gainTransitionOutMs);
+}
+
+void SelectedEventPanel::transitionOutChanged()
+{
+    if (auto* e = processor.getSelectedEvent())
+        processor.setEventDynamics (e->id, e->dynamicGainDb,
+                                   e->gainTransitionInMs, transitionOutSlider.getValue());
 }
 
 void SelectedEventPanel::splitClicked()
