@@ -397,11 +397,26 @@ bool VocalEditorAudioProcessor::restoreStateFromXml (const juce::XmlElement& xml
             return false;
         }
 
-        stagedAudio.setSize (static_cast<int> (reader->numChannels),
-                             static_cast<int> (reader->lengthInSamples));
-        if (! reader->read (&stagedAudio, 0, stagedAudio.getNumSamples(), 0, true, true))
+        if (! VocalAudioMath::isReasonableAudioAllocation (static_cast<int> (reader->numChannels),
+                                                            reader->lengthInSamples))
         {
-            errorMessage = "The source audio file could not be read completely.";
+            errorMessage = "The source audio file is too large to load safely into memory (limit: 8 GiB per audio buffer).";
+            return false;
+        }
+
+        try
+        {
+            stagedAudio.setSize (static_cast<int> (reader->numChannels),
+                                 static_cast<int> (reader->lengthInSamples));
+            if (! reader->read (&stagedAudio, 0, stagedAudio.getNumSamples(), 0, true, true))
+            {
+                errorMessage = "The source audio file could not be read completely.";
+                return false;
+            }
+        }
+        catch (const std::bad_alloc&)
+        {
+            errorMessage = "There is not enough memory to load the source audio file.";
             return false;
         }
         stagedSampleRate = reader->sampleRate;
@@ -1339,12 +1354,23 @@ bool VocalEditorAudioProcessor::loadAudioFile (const juce::File& file, juce::Str
         || ! std::isfinite (reader->sampleRate) || reader->sampleRate <= 0.0)
         return fail ("The selected audio file has invalid duration, channel count, or sample rate.");
 
-    juce::AudioBuffer<float> stagedAudio;
-    stagedAudio.setSize (static_cast<int> (reader->numChannels),
-                         static_cast<int> (reader->lengthInSamples));
+    if (! VocalAudioMath::isReasonableAudioAllocation (static_cast<int> (reader->numChannels),
+                                                        reader->lengthInSamples))
+        return fail ("The selected audio file is too large to load safely into memory (limit: 8 GiB per audio buffer).");
 
-    if (! reader->read (&stagedAudio, 0, stagedAudio.getNumSamples(), 0, true, true))
-        return fail ("The selected audio file could not be read completely.");
+    juce::AudioBuffer<float> stagedAudio;
+    try
+    {
+        stagedAudio.setSize (static_cast<int> (reader->numChannels),
+                             static_cast<int> (reader->lengthInSamples));
+
+        if (! reader->read (&stagedAudio, 0, stagedAudio.getNumSamples(), 0, true, true))
+            return fail ("The selected audio file could not be read completely.");
+    }
+    catch (const std::bad_alloc&)
+    {
+        return fail ("There is not enough memory to load the selected audio file.");
+    }
 
     // Commit only after opening, validation, allocation, and decoding succeed.
     stopPlayback();
