@@ -252,117 +252,178 @@ void MainComponent::paint (juce::Graphics& g)
     caption (spectralLowSlider, "Low");
     caption (spectralMidSlider, "Mid");
     caption (spectralHighSlider, "High");
+
+    // Live output meter in dBFS, next to the event inspector.
+    if (! meterBounds.isEmpty())
+    {
+        auto meter = meterBounds.reduced (4, 18);
+        g.setColour (juce::Colour (0xff111827));
+        g.fillRoundedRectangle (meter.toFloat(), 5.0f);
+        const float peak = juce::jlimit (0.0f, 1.0f, processor.getOutputPeak());
+        const float db = peak > 0.000001f ? juce::Decibels::gainToDecibels (peak) : -60.0f;
+        const float normalized = juce::jmap (juce::jlimit (-60.0f, 0.0f, db), -60.0f, 0.0f, 0.0f, 1.0f);
+        auto track = meter.reduced (7, 8);
+        const int filled = juce::roundToInt (track.getHeight() * normalized);
+        g.setColour (juce::Colour (0xff334155));
+        g.fillRoundedRectangle (track.toFloat(), 3.0f);
+        if (filled > 0)
+        {
+            auto bar = track.removeFromBottom (filled);
+            g.setColour (db > -3.0f ? juce::Colour (0xfff87171)
+                                    : db > -12.0f ? juce::Colour (0xfffbbf24)
+                                                  : juce::Colour (0xff34d399));
+            g.fillRoundedRectangle (bar.toFloat(), 3.0f);
+        }
+        g.setColour (juce::Colour (0xff94a3b8));
+        g.setFont (juce::FontOptions (10.0f));
+        for (const auto dbMark : { 0, -6, -12, -24, -36, -48, -60 })
+        {
+            const int y = juce::roundToInt (juce::jmap (static_cast<float> (dbMark), -60.0f, 0.0f,
+                                                       static_cast<float> (meter.getBottom() - 8),
+                                                       static_cast<float> (meter.getY() + 8)));
+            g.drawHorizontalLine (y, static_cast<float> (meter.getX()), static_cast<float> (meter.getX() + 5));
+            g.drawText (juce::String (dbMark), meter.getX() + 2, y - 6, 25, 12, juce::Justification::centredLeft);
+        }
+        g.setFont (juce::FontOptions (11.0f, juce::Font::bold));
+        g.drawText ("dB", meterBounds.getX(), meterBounds.getY(), meterBounds.getWidth(), 16, juce::Justification::centred);
+        g.setFont (juce::FontOptions (10.0f));
+        g.drawText (db <= -59.9f ? "-inf" : juce::String (db, 1), meterBounds.getX(), meterBounds.getBottom() - 14,
+                    meterBounds.getWidth(), 14, juce::Justification::centred);
+    }
 }
 
 void MainComponent::resized()
 {
     auto bounds = getLocalBounds();
+    const float scale = juce::jlimit (0.80f, 1.60f,
+        juce::jmin (static_cast<float> (getWidth()) / 1440.0f,
+                    static_cast<float> (getHeight()) / 900.0f));
+    const auto S = [scale] (int value) { return juce::roundToInt (static_cast<float> (value) * scale); };
+
+    // Scale control typography and value boxes with the editor.
+    const auto buttonFont = juce::FontOptions (static_cast<float> (S (12)));
+    for (auto* button : { &openButton, &playButton, &stopButton, &zoomInButton, &zoomOutButton,
+                          &zoomFitButton, &createEventButton, &automationButton, &undoButton, &redoButton,
+                          &autoSegmentButton, &levelProcessButton })
+        button->setFont (buttonFont);
+    titleLabel.setFont (juce::FontOptions (static_cast<float> (S (18)), juce::Font::bold));
+    statusLabel.setFont (juce::FontOptions (static_cast<float> (S (12))));
+    timeLabel.setFont (juce::FontOptions (static_cast<float> (S (13)), juce::Font::bold));
+    analysisLabel.setFont (juce::FontOptions (static_cast<float> (S (11))));
+    for (auto* slider : { &thresholdSlider, &silenceSlider, &paddingSlider, &targetLevelSlider,
+                          &deEsserFrequencySlider, &deEsserThresholdSlider, &deEsserReductionSlider,
+                          &dePlosiveCutoffSlider, &dePlosiveThresholdSlider, &dePlosiveReductionSlider,
+                          &noiseReductionThresholdSlider, &noiseReductionAmountSlider, &noiseReductionReleaseSlider,
+                          &roomTailThresholdSlider, &roomTailReductionSlider, &roomTailSensitivitySlider,
+                          &spectralLowSlider, &spectralMidSlider, &spectralHighSlider })
+        slider->setTextBoxStyle (juce::Slider::TextBoxRight, false, S (48), S (20));
 
     // Top bar
-    auto topBar = bounds.removeFromTop (44);
-    topBar.reduce (8, 6);
+    auto topBar = bounds.removeFromTop (S (44));
+    topBar.reduce (S (8), S (6));
 
-    titleLabel.setBounds (topBar.removeFromLeft (160));
-    topBar.removeFromLeft (12);
+    titleLabel.setBounds (topBar.removeFromLeft (S (160)));
+    topBar.removeFromLeft (S (12));
 
-    openButton.setBounds (topBar.removeFromLeft (70));
-    topBar.removeFromLeft (6);
-    playButton.setBounds (topBar.removeFromLeft (60));
-    topBar.removeFromLeft (4);
-    stopButton.setBounds (topBar.removeFromLeft (60));
-    topBar.removeFromLeft (16);
+    openButton.setBounds (topBar.removeFromLeft (S (70)));
+    topBar.removeFromLeft (S (6));
+    playButton.setBounds (topBar.removeFromLeft (S (60)));
+    topBar.removeFromLeft (S (4));
+    stopButton.setBounds (topBar.removeFromLeft (S (60)));
+    topBar.removeFromLeft (S (16));
 
-    zoomOutButton.setBounds (topBar.removeFromLeft (36));
-    topBar.removeFromLeft (3);
-    zoomInButton.setBounds (topBar.removeFromLeft (36));
-    topBar.removeFromLeft (3);
-    zoomFitButton.setBounds (topBar.removeFromLeft (48));
-    topBar.removeFromLeft (10);
-    createEventButton.setBounds (topBar.removeFromLeft (100));
-    topBar.removeFromLeft (4);
-    automationButton.setBounds (topBar.removeFromLeft (118));
-    topBar.removeFromLeft (4);
-    undoButton.setBounds (topBar.removeFromLeft (48));
-    topBar.removeFromLeft (3);
-    redoButton.setBounds (topBar.removeFromLeft (48));
+    zoomOutButton.setBounds (topBar.removeFromLeft (S (36)));
+    topBar.removeFromLeft (S (3));
+    zoomInButton.setBounds (topBar.removeFromLeft (S (36)));
+    topBar.removeFromLeft (S (3));
+    zoomFitButton.setBounds (topBar.removeFromLeft (S (48)));
+    topBar.removeFromLeft (S (10));
+    createEventButton.setBounds (topBar.removeFromLeft (S (100)));
+    topBar.removeFromLeft (S (4));
+    automationButton.setBounds (topBar.removeFromLeft (S (118)));
+    topBar.removeFromLeft (S (4));
+    undoButton.setBounds (topBar.removeFromLeft (S (48)));
+    topBar.removeFromLeft (S (3));
+    redoButton.setBounds (topBar.removeFromLeft (S (48)));
 
-    timeLabel.setBounds (topBar.removeFromRight (100));
+    timeLabel.setBounds (topBar.removeFromRight (S (100)));
 
     // Analysis toolbar (kept separate from the transport toolbar).
-    auto analysisBar = bounds.removeFromTop (58);
-    analysisBar.reduce (8, 2);
-    analysisLabel.setBounds (analysisBar.removeFromLeft (190));
-    autoSegmentButton.setBounds (analysisBar.removeFromLeft (112).reduced (2, 5));
-    levelProcessButton.setBounds (analysisBar.removeFromLeft (112).reduced (2, 5));
-    analysisBar.removeFromLeft (4);
-    thresholdSlider.setBounds (analysisBar.removeFromLeft (112).reduced (1, 5));
-    silenceSlider.setBounds (analysisBar.removeFromLeft (112).reduced (1, 5));
-    paddingSlider.setBounds (analysisBar.removeFromLeft (102).reduced (1, 5));
-    targetLevelSlider.setBounds (analysisBar.removeFromLeft (112).reduced (1, 5));
-    selectedOnlyToggle.setBounds (analysisBar.removeFromLeft (112).reduced (1, 5));
-    segmentTypeCombo.setBounds (analysisBar.removeFromLeft (100).reduced (1, 5));
+    auto analysisBar = bounds.removeFromTop (S (58));
+    analysisBar.reduce (S (8), S (2));
+    analysisLabel.setBounds (analysisBar.removeFromLeft (S (190)));
+    autoSegmentButton.setBounds (analysisBar.removeFromLeft (S (112)).reduced (S (2), S (5)));
+    levelProcessButton.setBounds (analysisBar.removeFromLeft (S (112)).reduced (S (2), S (5)));
+    analysisBar.removeFromLeft (S (4));
+    thresholdSlider.setBounds (analysisBar.removeFromLeft (S (112)).reduced (S (1), S (5)));
+    silenceSlider.setBounds (analysisBar.removeFromLeft (S (112)).reduced (S (1), S (5)));
+    paddingSlider.setBounds (analysisBar.removeFromLeft (S (102)).reduced (S (1), S (5)));
+    targetLevelSlider.setBounds (analysisBar.removeFromLeft (S (112)).reduced (S (1), S (5)));
+    selectedOnlyToggle.setBounds (analysisBar.removeFromLeft (S (112)).reduced (S (1), S (5)));
+    segmentTypeCombo.setBounds (analysisBar.removeFromLeft (S (100)).reduced (S (1), S (5)));
 
-    const int sidePadding = 8;
-    const int effectLabelWidth = juce::jlimit (112, 170, bounds.getWidth() / 7);
-    const int sliderGap = 6;
-    const int sliderWidth = juce::jmax (90, (bounds.getWidth() - sidePadding * 2 - effectLabelWidth - sliderGap * 3) / 3);
+    const int sidePadding = S (8);
+    const int effectLabelWidth = juce::jlimit (S (112), S (170), bounds.getWidth() / 7);
+    const int sliderGap = S (6);
+    const int sliderWidth = juce::jmax (S (90), (bounds.getWidth() - sidePadding * 2 - effectLabelWidth - sliderGap * 3) / 3);
 
-    auto deEsserBar = bounds.removeFromTop (44);
+    auto deEsserBar = bounds.removeFromTop (S (44));
     deEsserBar.reduce (sidePadding, 1);
-    deEsserToggle.setBounds (deEsserBar.removeFromLeft (effectLabelWidth).reduced (2, 3));
-    deEsserFrequencySlider.setBounds (deEsserBar.removeFromLeft (sliderWidth).withTrimmedTop (12).reduced (2, 1));
+    deEsserToggle.setBounds (deEsserBar.removeFromLeft (effectLabelWidth).reduced (S (2), S (3)));
+    deEsserFrequencySlider.setBounds (deEsserBar.removeFromLeft (sliderWidth).withTrimmedTop (S (12)).reduced (S (2), S (1)));
     deEsserBar.removeFromLeft (sliderGap);
-    deEsserThresholdSlider.setBounds (deEsserBar.removeFromLeft (sliderWidth).withTrimmedTop (12).reduced (2, 1));
+    deEsserThresholdSlider.setBounds (deEsserBar.removeFromLeft (sliderWidth).withTrimmedTop (S (12)).reduced (S (2), S (1)));
     deEsserBar.removeFromLeft (sliderGap);
-    deEsserReductionSlider.setBounds (deEsserBar.removeFromLeft (sliderWidth).withTrimmedTop (12).reduced (2, 1));
+    deEsserReductionSlider.setBounds (deEsserBar.removeFromLeft (sliderWidth).withTrimmedTop (S (12)).reduced (S (2), S (1)));
 
-    auto dePlosiveBar = bounds.removeFromTop (44);
+    auto dePlosiveBar = bounds.removeFromTop (S (44));
     dePlosiveBar.reduce (sidePadding, 1);
-    dePlosiveToggle.setBounds (dePlosiveBar.removeFromLeft (effectLabelWidth).reduced (2, 3));
-    dePlosiveCutoffSlider.setBounds (dePlosiveBar.removeFromLeft (sliderWidth).withTrimmedTop (12).reduced (2, 1));
+    dePlosiveToggle.setBounds (dePlosiveBar.removeFromLeft (effectLabelWidth).reduced (S (2), S (3)));
+    dePlosiveCutoffSlider.setBounds (dePlosiveBar.removeFromLeft (sliderWidth).withTrimmedTop (S (12)).reduced (S (2), S (1)));
     dePlosiveBar.removeFromLeft (sliderGap);
-    dePlosiveThresholdSlider.setBounds (dePlosiveBar.removeFromLeft (sliderWidth).withTrimmedTop (12).reduced (2, 1));
+    dePlosiveThresholdSlider.setBounds (dePlosiveBar.removeFromLeft (sliderWidth).withTrimmedTop (S (12)).reduced (S (2), S (1)));
     dePlosiveBar.removeFromLeft (sliderGap);
-    dePlosiveReductionSlider.setBounds (dePlosiveBar.removeFromLeft (sliderWidth).withTrimmedTop (12).reduced (2, 1));
+    dePlosiveReductionSlider.setBounds (dePlosiveBar.removeFromLeft (sliderWidth).withTrimmedTop (S (12)).reduced (S (2), S (1)));
 
-    auto noiseReductionBar = bounds.removeFromTop (44);
+    auto noiseReductionBar = bounds.removeFromTop (S (44));
     noiseReductionBar.reduce (sidePadding, 1);
-    noiseReductionToggle.setBounds (noiseReductionBar.removeFromLeft (effectLabelWidth).reduced (2, 3));
-    noiseReductionThresholdSlider.setBounds (noiseReductionBar.removeFromLeft (sliderWidth).withTrimmedTop (12).reduced (2, 1));
+    noiseReductionToggle.setBounds (noiseReductionBar.removeFromLeft (effectLabelWidth).reduced (S (2), S (3)));
+    noiseReductionThresholdSlider.setBounds (noiseReductionBar.removeFromLeft (sliderWidth).withTrimmedTop (S (12)).reduced (S (2), S (1)));
     noiseReductionBar.removeFromLeft (sliderGap);
-    noiseReductionAmountSlider.setBounds (noiseReductionBar.removeFromLeft (sliderWidth).withTrimmedTop (12).reduced (2, 1));
+    noiseReductionAmountSlider.setBounds (noiseReductionBar.removeFromLeft (sliderWidth).withTrimmedTop (S (12)).reduced (S (2), S (1)));
     noiseReductionBar.removeFromLeft (sliderGap);
-    noiseReductionReleaseSlider.setBounds (noiseReductionBar.removeFromLeft (sliderWidth).withTrimmedTop (12).reduced (2, 1));
+    noiseReductionReleaseSlider.setBounds (noiseReductionBar.removeFromLeft (sliderWidth).withTrimmedTop (S (12)).reduced (S (2), S (1)));
 
-    auto roomTailBar = bounds.removeFromTop (44);
+    auto roomTailBar = bounds.removeFromTop (S (44));
     roomTailBar.reduce (sidePadding, 1);
-    roomTailReductionToggle.setBounds (roomTailBar.removeFromLeft (effectLabelWidth).reduced (2, 3));
-    roomTailThresholdSlider.setBounds (roomTailBar.removeFromLeft (sliderWidth).withTrimmedTop (12).reduced (2, 1));
+    roomTailReductionToggle.setBounds (roomTailBar.removeFromLeft (effectLabelWidth).reduced (S (2), S (3)));
+    roomTailThresholdSlider.setBounds (roomTailBar.removeFromLeft (sliderWidth).withTrimmedTop (S (12)).reduced (S (2), S (1)));
     roomTailBar.removeFromLeft (sliderGap);
-    roomTailReductionSlider.setBounds (roomTailBar.removeFromLeft (sliderWidth).withTrimmedTop (12).reduced (2, 1));
+    roomTailReductionSlider.setBounds (roomTailBar.removeFromLeft (sliderWidth).withTrimmedTop (S (12)).reduced (S (2), S (1)));
     roomTailBar.removeFromLeft (sliderGap);
-    roomTailSensitivitySlider.setBounds (roomTailBar.removeFromLeft (sliderWidth).withTrimmedTop (12).reduced (2, 1));
+    roomTailSensitivitySlider.setBounds (roomTailBar.removeFromLeft (sliderWidth).withTrimmedTop (S (12)).reduced (S (2), S (1)));
 
-    auto spectralBalanceBar = bounds.removeFromTop (44);
+    auto spectralBalanceBar = bounds.removeFromTop (S (44));
     spectralBalanceBar.reduce (sidePadding, 1);
-    spectralBalanceToggle.setBounds (spectralBalanceBar.removeFromLeft (effectLabelWidth).reduced (2, 3));
-    spectralLowSlider.setBounds (spectralBalanceBar.removeFromLeft (sliderWidth).withTrimmedTop (12).reduced (2, 1));
+    spectralBalanceToggle.setBounds (spectralBalanceBar.removeFromLeft (effectLabelWidth).reduced (S (2), S (3)));
+    spectralLowSlider.setBounds (spectralBalanceBar.removeFromLeft (sliderWidth).withTrimmedTop (S (12)).reduced (S (2), S (1)));
     spectralBalanceBar.removeFromLeft (sliderGap);
-    spectralMidSlider.setBounds (spectralBalanceBar.removeFromLeft (sliderWidth).withTrimmedTop (12).reduced (2, 1));
+    spectralMidSlider.setBounds (spectralBalanceBar.removeFromLeft (sliderWidth).withTrimmedTop (S (12)).reduced (S (2), S (1)));
     spectralBalanceBar.removeFromLeft (sliderGap);
-    spectralHighSlider.setBounds (spectralBalanceBar.removeFromLeft (sliderWidth).withTrimmedTop (12).reduced (2, 1));
+    spectralHighSlider.setBounds (spectralBalanceBar.removeFromLeft (sliderWidth).withTrimmedTop (S (12)).reduced (S (2), S (1)));
 
     // Status bar
-    auto statusBar = bounds.removeFromBottom (28);
-    statusLabel.setBounds (statusBar.reduced (10, 4));
+    auto statusBar = bounds.removeFromBottom (S (28));
+    statusLabel.setBounds (statusBar.reduced (S (10), S (4)));
 
     // Keep the event controls visible beside the waveform.
-    eventPanel.setBounds (bounds.removeFromRight (260).reduced (4, 2));
+    meterBounds = bounds.removeFromRight (S (54)).reduced (S (2), S (4));
+    eventPanel.setBounds (bounds.removeFromRight (S (260)).reduced (S (4), S (2)));
 
     // Timeline and waveform share the remaining editing area.
-    auto timelineArea = bounds.removeFromTop (28);
-    timeline.setBounds (timelineArea.reduced (4, 0));
-    waveform.setBounds (bounds.reduced (4, 2));
+    auto timelineArea = bounds.removeFromTop (S (28));
+    timeline.setBounds (timelineArea.reduced (S (4), S (0)));
+    waveform.setBounds (bounds.reduced (S (4), S (2)));
 }
 
 //==============================================================================
@@ -640,6 +701,7 @@ bool MainComponent::keyPressed (const juce::KeyPress& key, juce::Component* orig
 //==============================================================================
 void MainComponent::timerCallback()
 {
+    repaint(); // Refresh the live output meter at the UI timer rate.
     // Update time display
     double pos = processor.getPlaybackPosition();
     int mins = static_cast<int> (pos) / 60;
