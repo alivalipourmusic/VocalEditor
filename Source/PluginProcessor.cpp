@@ -523,6 +523,8 @@ bool VocalEditorAudioProcessor::restoreStateFromXml (const juce::XmlElement& xml
     }
 
     undoManager.clearUndoHistory();
+    lastUndoActionName.clear();
+    lastUndoActionTimeMs = 0;
     updateProcessedBuffer();
     errorMessage.clear();
     return true;
@@ -1459,6 +1461,8 @@ bool VocalEditorAudioProcessor::loadAudioFile (const juce::File& file, juce::Str
     selectedEvent = nullptr;
     selectedEventIds.clear();
     undoManager.clearUndoHistory();
+    lastUndoActionName.clear();
+    lastUndoActionTimeMs = 0;
     currentProjectFile = {};
     updateProcessedBuffer();
 
@@ -1474,6 +1478,8 @@ void VocalEditorAudioProcessor::clearAudio()
     // empty timeline and fail, leaving a misleading stale history stack.
     stopPlayback();
     undoManager.clearUndoHistory();
+    lastUndoActionName.clear();
+    lastUndoActionTimeMs = 0;
     processedBufferUpdatePending.store (true, std::memory_order_release);
 
     audioAvailable.store (false, std::memory_order_release);
