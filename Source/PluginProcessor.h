@@ -132,6 +132,9 @@ private:
     // Triple-buffered render snapshots: the message thread prepares edits while
     // the audio thread reads one immutable snapshot without taking a blocking lock.
     std::array<juce::AudioBuffer<float>, 3> processedBuffers;
+    // Sample rate belongs to each immutable render snapshot. The audio thread
+    // must never pair a newly loaded file's rate with an older published buffer.
+    std::array<double, 3> processedBufferSampleRates { 44100.0, 44100.0, 44100.0 };
     std::atomic<int> activeProcessedBuffer { 0 };
     std::array<std::atomic<int>, 3> processedBufferReaders { 0, 0, 0 };
 
