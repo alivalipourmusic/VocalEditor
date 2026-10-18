@@ -41,7 +41,7 @@ public:
 
     bool loadAudioFile (const juce::File& file, juce::String* errorMessage = nullptr);
     void clearAudio();
-    bool hasAudio() const { return audioBuffer.getNumSamples() > 0; }
+    bool hasAudio() const { return audioAvailable.load (std::memory_order_acquire); }
     juce::File getCurrentAudioFile() const { return currentAudioFile; }
 
     bool saveProject (const juce::File& projectFile);
@@ -133,16 +133,17 @@ private:
     // the audio thread reads one immutable snapshot without taking a blocking lock.
     std::array<juce::AudioBuffer<float>, 3> processedBuffers;
     std::atomic<int> activeProcessedBuffer { 0 };
-    std::atomic<int> readingProcessedBuffer { -1 };
+    std::array<std::atomic<int>, 3> processedBufferReaders {};
 
     juce::File currentAudioFile;
     juce::File currentProjectFile;
 
-    double currentSampleRate = 44100.0;
+    std::atomic<double> currentSampleRate { 44100.0 };
+    std::atomic<bool> audioAvailable { false };
 
-    double playbackPosition = 0.0;
-    bool currentlyPlaying = false;
-    int playbackSamplePosition = 0;
+    std::atomic<double> playbackPosition { 0.0 };
+    std::atomic<bool> currentlyPlaying { false };
+    std::atomic<int> playbackSamplePosition { 0 };
 
     Selection selection;
     EventList eventList;
