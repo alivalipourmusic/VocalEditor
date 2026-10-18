@@ -86,6 +86,8 @@ public:
     VocalEvent* createEventFromSelection (VocalEvent::Type type = VocalEvent::Type::Custom);
     void setEventGain (const juce::Uuid& id, float gainDb);
     void setEventFades (const juce::Uuid& id, double fadeInMs, double fadeOutMs);
+    void setEventDynamics (const juce::Uuid& id, float dynamicGainDb,
+                           double transitionInMs, double transitionOutMs);
     void splitEvent (const juce::Uuid& id, double splitTime);
     void mergeEvents (const juce::Uuid& idA, const juce::Uuid& idB);
     void deleteEvent (const juce::Uuid& id);
