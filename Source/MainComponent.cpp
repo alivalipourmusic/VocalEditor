@@ -398,12 +398,20 @@ void MainComponent::createEventClicked()
 
 void MainComponent::undoClicked()
 {
-    processor.undo();
+    if (processor.canUndo())
+        processor.undo();
+    waveform.repaint();
+    timeline.repaint();
+    eventPanel.repaint();
 }
 
 void MainComponent::redoClicked()
 {
-    processor.redo();
+    if (processor.canRedo())
+        processor.redo();
+    waveform.repaint();
+    timeline.repaint();
+    eventPanel.repaint();
 }
 
 void MainComponent::gainSliderChanged()
@@ -463,6 +471,13 @@ bool MainComponent::keyPressed (const juce::KeyPress& key, juce::Component* orig
         stopButtonClicked();
         return true;
     }
+    if (code == juce::KeyPress::deleteKey || code == juce::KeyPress::backspaceKey)
+    {
+        processor.deleteSelectedEvents();
+        waveform.repaint();
+        eventPanel.repaint();
+        return true;
+    }
     if (command && code == 'Z')
     {
         undoClicked();
@@ -473,14 +488,14 @@ bool MainComponent::keyPressed (const juce::KeyPress& key, juce::Component* orig
         redoClicked();
         return true;
     }
-    if (command && code == 'O')
-    {
-        openButtonClicked();
-        return true;
-    }
     if (command && shift && code == 'O')
     {
         openProjectButtonClicked();
+        return true;
+    }
+    if (command && code == 'O')
+    {
+        openButtonClicked();
         return true;
     }
     if (command && code == 'S')
