@@ -137,6 +137,13 @@ public:
     float getDePlosiveThreshold() const { return dePlosiveThresholdDb; }
     float getDePlosiveMaxReduction() const { return dePlosiveMaxReductionDb; }
 
+    void setNoiseReductionEnabled (bool enabled);
+    bool isNoiseReductionEnabled() const { return noiseReductionEnabled; }
+    void setNoiseReductionParameters (float thresholdDb, float reductionDb, float releaseMs);
+    float getNoiseReductionThreshold() const { return noiseReductionThresholdDb; }
+    float getNoiseReductionAmount() const { return noiseReductionAmountDb; }
+    float getNoiseReductionRelease() const { return noiseReductionReleaseMs; }
+
 private:
     juce::AudioFormatManager formatManager;
     juce::AudioThumbnailCache thumbnailCache { 5 };
@@ -175,9 +182,15 @@ private:
     float dePlosiveThresholdDb = -24.0f;
     float dePlosiveMaxReductionDb = 9.0f;
 
+    bool noiseReductionEnabled = false;
+    float noiseReductionThresholdDb = -48.0f;
+    float noiseReductionAmountDb = 18.0f;
+    float noiseReductionReleaseMs = 180.0f;
+
     void applyEventToBuffer (const VocalEvent& e, juce::AudioBuffer<float>& buffer);
     void applyDeEsserToBuffer (juce::AudioBuffer<float>& buffer);
     void applyDePlosiveToBuffer (juce::AudioBuffer<float>& buffer);
+    void applyNoiseReductionToBuffer (juce::AudioBuffer<float>& buffer);
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (VocalEditorAudioProcessor)
 };
