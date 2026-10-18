@@ -137,6 +137,20 @@ MainComponent::MainComponent (VocalEditorAudioProcessor& p)
     for (auto* slider : { &deEsserFrequencySlider, &deEsserThresholdSlider, &deEsserReductionSlider })
         slider->onValueChange = [this] { deEsserChanged(); };
 
+    dePlosiveToggle.setColour (juce::ToggleButton::textColourId, textColour);
+    dePlosiveToggle.setToggleState (processor.isDePlosiveEnabled(), juce::dontSendNotification);
+    dePlosiveToggle.onClick = [this] { processor.setDePlosiveEnabled (dePlosiveToggle.getToggleState()); };
+    dePlosiveToggle.setTooltip ("Reduce excessive low-frequency plosive bursts.");
+    addAndMakeVisible (dePlosiveToggle);
+    setupDeEsserSlider (dePlosiveCutoffSlider, 60.0, 300.0, 5.0, " Hz", processor.getDePlosiveCutoff());
+    setupDeEsserSlider (dePlosiveThresholdSlider, -60.0, -6.0, 1.0, " dB", processor.getDePlosiveThreshold());
+    setupDeEsserSlider (dePlosiveReductionSlider, 0.0, 24.0, 1.0, " dB", processor.getDePlosiveMaxReduction());
+    dePlosiveCutoffSlider.setTooltip ("Low-frequency detector cutoff");
+    dePlosiveThresholdSlider.setTooltip ("Low-frequency burst threshold");
+    dePlosiveReductionSlider.setTooltip ("Maximum low-band attenuation");
+    for (auto* slider : { &dePlosiveCutoffSlider, &dePlosiveThresholdSlider, &dePlosiveReductionSlider })
+        slider->onValueChange = [this] { dePlosiveChanged(); };
+
     addAndMakeVisible (timeline);
     addAndMakeVisible (waveform);
     addAndMakeVisible (eventPanel);
@@ -210,6 +224,13 @@ void MainComponent::resized()
     deEsserFrequencySlider.setBounds (deEsserBar.removeFromLeft (220).reduced (2, 3));
     deEsserThresholdSlider.setBounds (deEsserBar.removeFromLeft (220).reduced (2, 3));
     deEsserReductionSlider.setBounds (deEsserBar.removeFromLeft (220).reduced (2, 3));
+
+    auto dePlosiveBar = bounds.removeFromTop (38);
+    dePlosiveBar.reduce (8, 1);
+    dePlosiveToggle.setBounds (dePlosiveBar.removeFromLeft (100).reduced (1, 3));
+    dePlosiveCutoffSlider.setBounds (dePlosiveBar.removeFromLeft (220).reduced (2, 3));
+    dePlosiveThresholdSlider.setBounds (dePlosiveBar.removeFromLeft (220).reduced (2, 3));
+    dePlosiveReductionSlider.setBounds (dePlosiveBar.removeFromLeft (220).reduced (2, 3));
 
     // Status bar
     auto statusBar = bounds.removeFromBottom (28);
@@ -386,6 +407,14 @@ void MainComponent::deEsserChanged()
         static_cast<float> (deEsserReductionSlider.getValue()));
 }
 
+void MainComponent::dePlosiveChanged()
+{
+    processor.setDePlosiveParameters (
+        static_cast<float> (dePlosiveCutoffSlider.getValue()),
+        static_cast<float> (dePlosiveThresholdSlider.getValue()),
+        static_cast<float> (dePlosiveReductionSlider.getValue()));
+}
+
 void MainComponent::levelProcessClicked()
 {
     const int count = processor.levelEventsToTarget (
@@ -485,6 +514,17 @@ void MainComponent::timerCallback()
     if (! deEsserReductionSlider.isMouseButtonDown()
         && std::abs (deEsserReductionSlider.getValue() - processor.getDeEsserMaxReduction()) > 0.1)
         deEsserReductionSlider.setValue (processor.getDeEsserMaxReduction(), juce::dontSendNotification);
+    if (! dePlosiveToggle.isMouseButtonDown())
+        dePlosiveToggle.setToggleState (processor.isDePlosiveEnabled(), juce::dontSendNotification);
+    if (! dePlosiveCutoffSlider.isMouseButtonDown()
+        && std::abs (dePlosiveCutoffSlider.getValue() - processor.getDePlosiveCutoff()) > 1.0)
+        dePlosiveCutoffSlider.setValue (processor.getDePlosiveCutoff(), juce::dontSendNotification);
+    if (! dePlosiveThresholdSlider.isMouseButtonDown()
+        && std::abs (dePlosiveThresholdSlider.getValue() - processor.getDePlosiveThreshold()) > 0.1)
+        dePlosiveThresholdSlider.setValue (processor.getDePlosiveThreshold(), juce::dontSendNotification);
+    if (! dePlosiveReductionSlider.isMouseButtonDown()
+        && std::abs (dePlosiveReductionSlider.getValue() - processor.getDePlosiveMaxReduction()) > 0.1)
+        dePlosiveReductionSlider.setValue (processor.getDePlosiveMaxReduction(), juce::dontSendNotification);
 
     // Update play button text
     playButton.setButtonText (processor.isPlaying() ? "Pause" : "Play");
